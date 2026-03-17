@@ -91,38 +91,111 @@ body {
 }
 .card h2 { font-size: 1em; color: var(--text2); margin-bottom: 12px; font-weight: 500; }
 
-/* Status display */
-.status-display {
-  text-align: center; padding: 8px 0;
+/* ---- Huckleberry-style Timer Ring ---- */
+.timer-container {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px 0 8px;
 }
-.status-emoji { font-size: 48px; margin-bottom: 8px; }
-.status-label { font-size: 0.9em; color: var(--text2); }
-.status-timer { font-size: 2em; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
-
-/* Big action button */
-.action-btn {
-  display: block; width: 100%; padding: 20px;
-  font-size: 1.2em; font-weight: 600;
-  border: none; border-radius: var(--radius);
-  cursor: pointer; margin: 12px 0;
-  transition: transform 0.1s, opacity 0.1s;
-  color: white;
+.timer-ring-wrap {
+  position: relative; width: 180px; height: 180px; margin-bottom: 16px;
 }
-.action-btn:active { transform: scale(0.97); opacity: 0.9; }
-.action-btn.sleep-btn { background: linear-gradient(135deg, #9b8ec4, #7c8cbf); }
-.action-btn.wake-btn { background: linear-gradient(135deg, #f4a261, #e9c46a); }
+.timer-ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.timer-ring-bg { fill: none; stroke: var(--bg2); stroke-width: 8; }
+.timer-ring-fg { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.timer-ring-fg.sleeping { stroke: var(--sleep); }
+.timer-ring-fg.awake { stroke: var(--wake); }
+.timer-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.timer-center .timer-icon { font-size: 32px; margin-bottom: 4px; }
+.timer-center .timer-label { font-size: 0.8em; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.timer-center .timer-value { font-size: 1.8em; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.timer-center .timer-since { font-size: 0.75em; color: var(--text2); }
 
-/* Time adjust */
+/* Pulse animation when sleeping */
+@keyframes pulse-ring {
+  0% { opacity: 0.6; transform: scale(0.95) rotate(-90deg); }
+  50% { opacity: 1; transform: scale(1) rotate(-90deg); }
+  100% { opacity: 0.6; transform: scale(0.95) rotate(-90deg); }
+}
+.timer-ring-wrap.sleeping svg { animation: pulse-ring 3s ease-in-out infinite; }
+
+/* Toggle button */
+.toggle-btn {
+  width: 100%; padding: 18px; font-size: 1.15em; font-weight: 600;
+  border: none; border-radius: 50px; cursor: pointer;
+  color: white; transition: transform 0.1s, background 0.3s;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.toggle-btn:active { transform: scale(0.97); }
+.toggle-btn.start-sleep { background: linear-gradient(135deg, #9b8ec4, #7c8cbf); }
+.toggle-btn.end-sleep { background: linear-gradient(135deg, #f4a261, #e9c46a); }
+
+/* Add past sleep button */
+.add-past-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 12px; margin-top: 8px;
+  background: none; border: 2px dashed var(--accent2); border-radius: 50px;
+  color: var(--accent); font-size: 0.9em; font-weight: 500; cursor: pointer;
+}
+.add-past-btn:active { opacity: 0.7; }
+
+/* Time adjust (inline under toggle) */
 .time-adjust {
   display: flex; align-items: center; justify-content: center; gap: 12px;
-  margin: 8px 0;
+  margin: 10px 0 4px; padding: 8px; background: var(--bg); border-radius: 12px;
 }
 .time-adjust button {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 36px; height: 36px; border-radius: 50%;
   border: 2px solid var(--accent2); background: var(--card); color: var(--text);
-  font-size: 1.1em; cursor: pointer;
+  font-size: 1em; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
-.time-adjust span { font-size: 1.1em; font-weight: 600; min-width: 80px; text-align: center; }
+.time-adjust button.confirm-adj {
+  background: var(--accent); color: white; border-color: var(--accent);
+}
+.time-adjust span { font-size: 1.05em; font-weight: 600; min-width: 80px; text-align: center; }
+
+/* Today event cards (horizontal timeline) */
+.today-events { display: flex; flex-direction: column; gap: 8px; }
+.event-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; background: var(--bg); border-radius: 12px;
+  position: relative; overflow: hidden;
+}
+.event-card .ev-bar {
+  width: 4px; height: 40px; border-radius: 2px; flex-shrink: 0;
+}
+.event-card .ev-bar.sleep { background: var(--sleep); }
+.event-card .ev-bar.wake { background: var(--wake); }
+.event-card .ev-icon { font-size: 1.3em; flex-shrink: 0; }
+.event-card .ev-info { flex: 1; }
+.event-card .ev-title { font-weight: 600; font-size: 0.9em; }
+.event-card .ev-subtitle { font-size: 0.8em; color: var(--text2); }
+.event-card .ev-dur {
+  font-weight: 700; font-size: 0.95em; color: var(--sleep);
+  flex-shrink: 0;
+}
+.event-card .ev-actions { flex-shrink: 0; }
+.event-card .ev-actions button {
+  background: none; border: none; color: var(--text2); font-size: 1em; cursor: pointer; padding: 4px;
+}
+.event-card.in-progress {
+  border: 2px solid var(--sleep); background: rgba(155,142,196,0.08);
+}
+.event-card.in-progress .ev-dur { color: var(--text2); font-style: italic; }
+
+/* Past sleep modal */
+.past-sleep-form {
+  display: flex; flex-direction: column; gap: 12px; margin-top: 12px;
+}
+.past-sleep-form label { font-size: 0.9em; font-weight: 500; display: flex; flex-direction: column; gap: 4px; }
+.past-sleep-form input[type="time"], .past-sleep-form input[type="date"] {
+  padding: 10px 14px; border: 2px solid var(--accent2); border-radius: 10px;
+  background: var(--bg); color: var(--text); font-size: 1em;
+}
+.past-sleep-form .form-row { display: flex; gap: 10px; }
+.past-sleep-form .form-row > * { flex: 1; }
 
 /* Prediction box */
 .prediction-box { text-align: center; }
@@ -167,7 +240,7 @@ body {
 .nap-option p { font-size: 0.8em; color: var(--text2); line-height: 1.3; }
 .nap-option .star { color: var(--wake); }
 
-/* Nap list */
+/* Nap list (kept for history tab) */
 .nap-list { list-style: none; }
 .nap-item {
   display: flex; justify-content: space-between; align-items: center;
@@ -323,25 +396,42 @@ body {
   <!-- ===== DASHBOARD TAB ===== -->
   <div id="tab-dashboard" class="tab-content active">
 
-    <!-- Status -->
+    <!-- Timer Ring -->
     <div class="card">
-      <div class="status-display">
-        <div class="status-emoji" id="dash-emoji">☀️</div>
-        <div class="status-label" id="dash-label">Awake</div>
-        <div class="status-timer" id="dash-timer">0h 0m</div>
+      <div class="timer-container">
+        <div class="timer-ring-wrap" id="timer-ring-wrap">
+          <svg viewBox="0 0 200 200">
+            <circle class="timer-ring-bg" cx="100" cy="100" r="88"></circle>
+            <circle class="timer-ring-fg awake" id="timer-ring-fg" cx="100" cy="100" r="88"
+              stroke-dasharray="553" stroke-dashoffset="553"></circle>
+          </svg>
+          <div class="timer-center">
+            <div class="timer-icon" id="timer-icon">☀️</div>
+            <div class="timer-label" id="timer-label">Awake</div>
+            <div class="timer-value" id="timer-value">0:00</div>
+            <div class="timer-since" id="timer-since">since --:--</div>
+          </div>
+        </div>
       </div>
+
+      <!-- Single toggle button -->
+      <button class="toggle-btn start-sleep" id="toggle-btn" onclick="toggleSleep()">
+        <span id="toggle-icon">🌙</span>
+        <span id="toggle-text">Start Sleep</span>
+      </button>
 
       <!-- Time adjust (shown after action) -->
       <div class="time-adjust hidden" id="time-adjust">
         <button onclick="adjustTime(-5)">-5</button>
         <span id="adjust-time-display">--:--</span>
         <button onclick="adjustTime(5)">+5</button>
-        <button onclick="confirmAdjust()" style="background:var(--accent);color:white;border-color:var(--accent)">✓</button>
+        <button class="confirm-adj" onclick="confirmAdjust()">✓</button>
       </div>
 
-      <!-- Action button -->
-      <button class="action-btn sleep-btn" id="btn-sleep" onclick="recordSleep()">Fell Asleep 😴</button>
-      <button class="action-btn wake-btn hidden" id="btn-wake" onclick="recordWake()">Woke Up ☀️</button>
+      <!-- Add past sleep -->
+      <button class="add-past-btn" onclick="showPastSleepModal()">
+        <span>＋</span> Log a past sleep
+      </button>
     </div>
 
     <!-- Transition banner -->
@@ -389,12 +479,12 @@ body {
       <div class="morning-plan" id="morning-plan"></div>
     </div>
 
-    <!-- Today's naps -->
+    <!-- Today's events (Huckleberry-style cards) -->
     <div class="card">
-      <h2>Today's Naps</h2>
-      <ul class="nap-list" id="today-naps">
-        <li style="color:var(--text2);padding:10px 0">No naps recorded today</li>
-      </ul>
+      <h2>Today's Sleep</h2>
+      <div class="today-events" id="today-events">
+        <div style="color:var(--text2);padding:10px 0;text-align:center;font-size:0.9em">No sleep recorded today</div>
+      </div>
     </div>
 
     <!-- Day rating -->
@@ -489,6 +579,29 @@ body {
       <span class="tab-icon">⚙️</span> Settings
     </button>
   </nav>
+</div>
+
+<!-- Past Sleep Modal -->
+<div class="modal-overlay hidden" id="past-sleep-modal" onclick="if(event.target===this)closePastSleepModal()">
+  <div class="modal">
+    <h2>📝 Log Past Sleep</h2>
+    <p>Record a nap that already happened.</p>
+    <div class="past-sleep-form">
+      <label>Date
+        <input type="date" id="past-date">
+      </label>
+      <div class="form-row">
+        <label>Fell asleep
+          <input type="time" id="past-start">
+        </label>
+        <label>Woke up
+          <input type="time" id="past-end">
+        </label>
+      </div>
+      <button class="btn btn-primary" onclick="savePastSleep()">Save</button>
+      <button class="btn btn-outline modal-close" onclick="closePastSleepModal()">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <!-- Help Modal -->
@@ -1189,7 +1302,7 @@ function refreshAll() {
   renderRating();
 }
 
-// ---- TIMER ----
+// ---- TIMER (Huckleberry ring style) ----
 function startTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
@@ -1198,20 +1311,38 @@ function startTimer() {
 
 function updateTimer() {
   const sleeping = isCurrentlySleeping();
-  const emoji = document.getElementById('dash-emoji');
-  const label = document.getElementById('dash-label');
-  const timer = document.getElementById('dash-timer');
-  const btnSleep = document.getElementById('btn-sleep');
-  const btnWake = document.getElementById('btn-wake');
+  const ringWrap = document.getElementById('timer-ring-wrap');
+  const ringFg = document.getElementById('timer-ring-fg');
+  const icon = document.getElementById('timer-icon');
+  const label = document.getElementById('timer-label');
+  const value = document.getElementById('timer-value');
+  const since = document.getElementById('timer-since');
+  const toggleBtn = document.getElementById('toggle-btn');
+  const toggleIcon = document.getElementById('toggle-icon');
+  const toggleText = document.getElementById('toggle-text');
+
+  const circumference = 2 * Math.PI * 88; // ~553
 
   if (sleeping) {
     const rec = getCurrentSleepRecord();
-    const elapsed = (Date.now() - new Date(rec.start).getTime()) / 60000;
-    emoji.textContent = '😴';
+    const startTime = new Date(rec.start);
+    const elapsed = (Date.now() - startTime.getTime()) / 60000;
+    const maxRing = 120; // full ring at 2 hours
+    const progress = Math.min(elapsed / maxRing, 1);
+
+    ringWrap.classList.add('sleeping');
+    ringFg.classList.remove('awake');
+    ringFg.classList.add('sleeping');
+    ringFg.setAttribute('stroke-dashoffset', circumference * (1 - progress));
+
+    icon.textContent = '😴';
     label.textContent = 'Sleeping';
-    timer.textContent = minsToHM(elapsed);
-    btnSleep.classList.add('hidden');
-    btnWake.classList.remove('hidden');
+    value.textContent = formatElapsed(elapsed);
+    since.textContent = `since ${formatTime(startTime)}`;
+
+    toggleBtn.className = 'toggle-btn end-sleep';
+    toggleIcon.textContent = '☀️';
+    toggleText.textContent = 'End Sleep';
   } else {
     const todayRecs = getTodayRecords();
     const completedNaps = todayRecs.filter(r => r.end !== null);
@@ -1224,14 +1355,42 @@ function updateTimer() {
       lastWake = new Date();
       lastWake.setHours(0, 0, 0, 0);
       lastWake.setMinutes(wakeMins);
-      if (lastWake > new Date()) lastWake = new Date(); // don't show future
+      if (lastWake > new Date()) lastWake = new Date();
     }
-    const elapsed = (Date.now() - lastWake.getTime()) / 60000;
-    emoji.textContent = '☀️';
+    const elapsed = Math.max(0, (Date.now() - lastWake.getTime()) / 60000);
+    const maxRing = 240; // full ring at 4 hours awake
+    const progress = Math.min(elapsed / maxRing, 1);
+
+    ringWrap.classList.remove('sleeping');
+    ringFg.classList.remove('sleeping');
+    ringFg.classList.add('awake');
+    ringFg.setAttribute('stroke-dashoffset', circumference * (1 - progress));
+
+    icon.textContent = '☀️';
     label.textContent = 'Awake';
-    timer.textContent = minsToHM(Math.max(0, elapsed));
-    btnSleep.classList.remove('hidden');
-    btnWake.classList.add('hidden');
+    value.textContent = formatElapsed(elapsed);
+    since.textContent = `since ${formatTime(lastWake)}`;
+
+    toggleBtn.className = 'toggle-btn start-sleep';
+    toggleIcon.textContent = '🌙';
+    toggleText.textContent = 'Start Sleep';
+  }
+}
+
+function formatElapsed(mins) {
+  const h = Math.floor(mins / 60);
+  const m = Math.floor(mins % 60);
+  const s = Math.floor((mins * 60) % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+// ---- TOGGLE SLEEP/WAKE ----
+function toggleSleep() {
+  if (isCurrentlySleeping()) {
+    recordWake();
+  } else {
+    recordSleep();
   }
 }
 
@@ -1283,6 +1442,37 @@ function deleteRecord(id) {
   if (!confirm('Delete this nap record?')) return;
   data.records = data.records.filter(r => r.id !== id);
   saveData(data);
+  refreshAll();
+}
+
+// ---- PAST SLEEP MODAL ----
+function showPastSleepModal() {
+  const now = new Date();
+  document.getElementById('past-date').value = todayStr();
+  document.getElementById('past-start').value = '';
+  document.getElementById('past-end').value = '';
+  document.getElementById('past-sleep-modal').classList.remove('hidden');
+}
+
+function closePastSleepModal() {
+  document.getElementById('past-sleep-modal').classList.add('hidden');
+}
+
+function savePastSleep() {
+  const dateVal = document.getElementById('past-date').value;
+  const startVal = document.getElementById('past-start').value;
+  const endVal = document.getElementById('past-end').value;
+  if (!dateVal || !startVal || !endVal) { alert('Please fill in all fields.'); return; }
+
+  const start = new Date(`${dateVal}T${startVal}:00`);
+  const end = new Date(`${dateVal}T${endVal}:00`);
+  if (end <= start) { alert('Wake time must be after sleep time.'); return; }
+
+  const rec = { id: uuid(), start: start.toISOString(), end: end.toISOString() };
+  data.records.push(rec);
+  data.records.sort((a,b) => new Date(a.start) - new Date(b.start));
+  saveData(data);
+  closePastSleepModal();
   refreshAll();
 }
 
@@ -1380,22 +1570,29 @@ function renderDashboard() {
     planCard.classList.add('hidden');
   }
 
-  // Today's naps list
-  const napList = document.getElementById('today-naps');
+  // Today's events as Huckleberry-style cards
+  const eventsEl = document.getElementById('today-events');
   if (todayRecs.length === 0) {
-    napList.innerHTML = '<li style="color:var(--text2);padding:10px 0">No naps recorded today</li>';
+    eventsEl.innerHTML = '<div style="color:var(--text2);padding:10px 0;text-align:center;font-size:0.9em">No sleep recorded today</div>';
   } else {
-    napList.innerHTML = todayRecs.map((r, i) => {
+    eventsEl.innerHTML = todayRecs.map((r, i) => {
       const start = new Date(r.start);
       const end = r.end ? new Date(r.end) : null;
-      const dur = end ? minsToHM((end - start) / 60000) : 'sleeping...';
+      const durMins = end ? (end - start) / 60000 : (Date.now() - start.getTime()) / 60000;
+      const inProgress = !r.end;
       return `
-        <li class="nap-item">
-          <span class="nap-num">Nap ${i+1}</span>
-          <span class="nap-times">${formatTime(start)} – ${end ? formatTime(end) : 'now'}</span>
-          <span class="nap-dur">${dur}</span>
-          <span class="nap-actions"><button onclick="deleteRecord('${r.id}')">🗑</button></span>
-        </li>`;
+        <div class="event-card ${inProgress ? 'in-progress' : ''}">
+          <div class="ev-bar sleep"></div>
+          <div class="ev-icon">${inProgress ? '😴' : '🌙'}</div>
+          <div class="ev-info">
+            <div class="ev-title">Nap ${i + 1}${inProgress ? ' (in progress)' : ''}</div>
+            <div class="ev-subtitle">${formatTime(start)} – ${end ? formatTime(end) : 'now'}</div>
+          </div>
+          <div class="ev-dur">${minsToHM(durMins)}</div>
+          <div class="ev-actions">
+            <button onclick="deleteRecord('${r.id}')" title="Delete">🗑</button>
+          </div>
+        </div>`;
     }).join('');
   }
 }
