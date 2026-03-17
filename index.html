@@ -549,8 +549,11 @@ body {
       </p>
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px">
         <label>GitHub Token</label>
-        <input type="password" id="set-gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;font-size:0.85em" onchange="saveGhToken(this.value).then(()=>{this.value='••••••••';})">
-        <span style="font-size:0.75em;color:var(--text2)" id="gh-token-status"></span>
+        <div id="gh-token-status" style="font-size:0.85em;color:var(--text2);padding:8px 0">Checking...</div>
+        <details style="font-size:0.8em;color:var(--text2)">
+          <summary style="cursor:pointer">Override with a different token</summary>
+          <input type="password" id="set-gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;font-size:0.85em;margin-top:6px" onchange="saveGhToken(this.value).then(()=>{this.value='';document.getElementById('gh-token-status').textContent='🔐 Custom token saved (encrypted)';})">
+        </details>
       </div>
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px">
         <label>Repository</label>
@@ -1072,6 +1075,37 @@ async function decryptToken(encrypted, pin) {
 // Store the PIN in memory (session only) for encrypt/decrypt
 let sessionPin = null;
 
+// Pre-encrypted GitHub token (AES-256-GCM, key derived from PIN via PBKDF2)
+// To update: encrypt a new token using the same PIN and replace this string
+const ENCRYPTED_GH_TOKEN = 'KlmSEd7DWr5084GXqTO40XRJJTjD7uQWBn2pzfdkg9q4AnQbORxAQVQ5792OmLSCY9x3KekuH8XXlxQ1842SZCK1Q4o=';
+
+async function decryptBuiltinToken(pin) {
+  try {
+    const combined = Uint8Array.from(atob(ENCRYPTED_GH_TOKEN), c => c.charCodeAt(0));
+    const iv = combined.slice(0, 12);
+    const authTag = combined.slice(12, 28);
+    const ciphertext = combined.slice(28);
+    // Combine ciphertext + authTag for Web Crypto (it expects them together)
+    const ctWithTag = new Uint8Array(ciphertext.length + authTag.length);
+    ctWithTag.set(ciphertext);
+    ctWithTag.set(authTag, ciphertext.length);
+
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: enc.encode('babysleep-salt-v1'), iterations: 100000, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ctWithTag);
+    return new TextDecoder().decode(plainBuf);
+  } catch (e) {
+    return null;
+  }
+}
+
 function getGitHubConfig() {
   return {
     token: decryptedGhToken || '',
@@ -1097,13 +1131,19 @@ async function saveGhToken(rawToken) {
 
 async function loadGhToken() {
   if (!sessionPin) return;
+  // Try user-saved encrypted token first
+  if (data.settings.ghTokenEnc) {
+    decryptedGhToken = await decryptToken(data.settings.ghTokenEnc, sessionPin);
+    if (decryptedGhToken) return;
+  }
   // Migrate: if plain text token exists, encrypt it
-  if (data.settings.ghToken && !data.settings.ghTokenEnc) {
+  if (data.settings.ghToken) {
     await saveGhToken(data.settings.ghToken);
     return;
   }
-  if (data.settings.ghTokenEnc) {
-    decryptedGhToken = await decryptToken(data.settings.ghTokenEnc, sessionPin);
+  // Fall back to built-in encrypted token
+  if (ENCRYPTED_GH_TOKEN) {
+    decryptedGhToken = await decryptBuiltinToken(sessionPin);
   }
 }
 
@@ -1856,8 +1896,7 @@ function initApp() {
   document.getElementById('set-age').value = s.babyAgeMonths;
   document.getElementById('set-token-hash').value = s.tokenHash || DEFAULT_TOKEN_HASH;
   document.getElementById('set-pin-hash').value = s.pinHash || DEFAULT_PIN_HASH;
-  document.getElementById('set-gh-token').value = decryptedGhToken ? '••••••••' : '';
-  document.getElementById('gh-token-status').textContent = decryptedGhToken ? '🔐 Token stored (encrypted)' : '';
+  document.getElementById('gh-token-status').textContent = decryptedGhToken ? '🔐 Token active (encrypted in source)' : '⚠️ Token not available — check password';
   document.getElementById('set-gh-repo').value = s.ghRepo || '';
 
   // Language buttons
