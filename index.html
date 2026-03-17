@@ -549,7 +549,8 @@ body {
       </p>
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px">
         <label>GitHub Token</label>
-        <input type="password" id="set-gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;font-size:0.85em" onchange="saveSetting('ghToken',this.value)">
+        <input type="password" id="set-gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;font-size:0.85em" onchange="saveGhToken(this.value).then(()=>{this.value='••••••••';})">
+        <span style="font-size:0.75em;color:var(--text2)" id="gh-token-status"></span>
       </div>
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px">
         <label>Repository</label>
@@ -1000,7 +1001,7 @@ function defaultData() {
       tokenHash: DEFAULT_TOKEN_HASH,
       pinHash: DEFAULT_PIN_HASH,
       ghToken: '',   // GitHub Personal Access Token
-      ghRepo: '',    // e.g. "JujuAntenna/baby-sleep-tracker"
+      ghRepo: 'JujuAntenna/baby-sleep-tracker',
       ghPath: 'data/sleep-data.json',
       ghBranch: 'main',
     },
@@ -1027,12 +1028,54 @@ function saveSetting(key, val) {
 // ---- GITHUB SYNC ----
 let syncTimeout = null;
 let isSyncing = false;
-let fileSha = null; // GitHub needs the current file SHA to update it
+let fileSha = null;
+let decryptedGhToken = null; // Held in memory only after PIN unlock
+
+// ---- Token Encryption (AES-GCM with PIN-derived key) ----
+async function deriveKey(pin) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('babysleep-salt-v1'), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptToken(token, pin) {
+  const key = await deriveKey(pin);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(token));
+  // Store as iv:ciphertext, both base64
+  const ivB64 = btoa(String.fromCharCode(...iv));
+  const ctB64 = btoa(String.fromCharCode(...new Uint8Array(ciphertext)));
+  return ivB64 + ':' + ctB64;
+}
+
+async function decryptToken(encrypted, pin) {
+  try {
+    const [ivB64, ctB64] = encrypted.split(':');
+    const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+    const ciphertext = Uint8Array.from(atob(ctB64), c => c.charCodeAt(0));
+    const key = await deriveKey(pin);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return new TextDecoder().decode(plainBuf);
+  } catch (e) {
+    console.error('Token decryption failed');
+    return null;
+  }
+}
+
+// Store the PIN in memory (session only) for encrypt/decrypt
+let sessionPin = null;
 
 function getGitHubConfig() {
   return {
-    token: data.settings.ghToken || '',
-    repo: data.settings.ghRepo || '',   // e.g. "JujuAntenna/baby-sleep-tracker"
+    token: decryptedGhToken || '',
+    repo: data.settings.ghRepo || '',
     path: data.settings.ghPath || 'data/sleep-data.json',
     branch: data.settings.ghBranch || 'main',
   };
@@ -1041,6 +1084,27 @@ function getGitHubConfig() {
 function isGitHubConfigured() {
   const cfg = getGitHubConfig();
   return cfg.token && cfg.repo;
+}
+
+async function saveGhToken(rawToken) {
+  if (!sessionPin) return;
+  const encrypted = await encryptToken(rawToken, sessionPin);
+  data.settings.ghTokenEnc = encrypted;
+  data.settings.ghToken = ''; // Clear any old plain text token
+  saveData(data);
+  decryptedGhToken = rawToken;
+}
+
+async function loadGhToken() {
+  if (!sessionPin) return;
+  // Migrate: if plain text token exists, encrypt it
+  if (data.settings.ghToken && !data.settings.ghTokenEnc) {
+    await saveGhToken(data.settings.ghToken);
+    return;
+  }
+  if (data.settings.ghTokenEnc) {
+    decryptedGhToken = await decryptToken(data.settings.ghTokenEnc, sessionPin);
+  }
 }
 
 function syncToCloud() {
@@ -1306,6 +1370,8 @@ async function checkPin() {
   const storedHash = data.settings.pinHash || DEFAULT_PIN_HASH;
   if (pinHash === storedHash) {
     sessionStorage.setItem('bs_auth', 'true');
+    sessionPin = pin; // Keep PIN in memory for token encryption
+    await loadGhToken(); // Decrypt GitHub token
     showScreen('app');
     initApp();
   } else {
@@ -1790,7 +1856,8 @@ function initApp() {
   document.getElementById('set-age').value = s.babyAgeMonths;
   document.getElementById('set-token-hash').value = s.tokenHash || DEFAULT_TOKEN_HASH;
   document.getElementById('set-pin-hash').value = s.pinHash || DEFAULT_PIN_HASH;
-  document.getElementById('set-gh-token').value = s.ghToken || '';
+  document.getElementById('set-gh-token').value = decryptedGhToken ? '••••••••' : '';
+  document.getElementById('gh-token-status').textContent = decryptedGhToken ? '🔐 Token stored (encrypted)' : '';
   document.getElementById('set-gh-repo').value = s.ghRepo || '';
 
   // Language buttons
