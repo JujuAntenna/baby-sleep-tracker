@@ -542,14 +542,18 @@ body {
     </div>
 
     <div class="card">
-      <h2>☁️ Cloud Sync</h2>
+      <h2>☁️ GitHub Sync</h2>
       <p style="font-size:0.85em;color:var(--text2);margin-bottom:12px">
-        Connect to your backend server to sync data across devices.
-        Leave empty to use local storage only.
+        Sync data via your private GitHub repo. No server needed.<br>
+        Create a <a href="https://github.com/settings/tokens" target="_blank" style="color:var(--accent)">Personal Access Token</a> with <code>repo</code> scope.
       </p>
-      <div class="setting-row">
-        <label>Server URL</label>
-        <input type="text" id="set-sync-url" placeholder="https://your-server:3456" style="width:100%;font-size:0.85em" onchange="saveSetting('syncUrl',this.value)">
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px">
+        <label>GitHub Token</label>
+        <input type="password" id="set-gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;font-size:0.85em" onchange="saveSetting('ghToken',this.value)">
+      </div>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px">
+        <label>Repository</label>
+        <input type="text" id="set-gh-repo" placeholder="JujuAntenna/baby-sleep-tracker" style="width:100%;font-size:0.85em" onchange="saveSetting('ghRepo',this.value)">
       </div>
       <button class="btn btn-outline" onclick="syncFromCloud()" style="margin-top:8px">🔄 Sync Now</button>
     </div>
@@ -827,8 +831,8 @@ const i18n = {
     morningWakeTime: '早起时间',
     targetBedtime: '目标就寝时间',
     babyAge: '宝宝月龄',
-    cloudSync: '☁️ 云同步',
-    cloudSyncDesc: '连接后端服务器，跨设备同步数据。留空则仅使用本地存储。',
+    cloudSync: '☁️ GitHub 同步',
+    cloudSyncDesc: '通过私有 GitHub 仓库同步数据，无需服务器。',
     serverUrl: '服务器地址',
     syncNow: '🔄 立即同步',
     security: '🔐 安全设置',
@@ -995,7 +999,10 @@ function defaultData() {
       babyAgeMonths: 7,
       tokenHash: DEFAULT_TOKEN_HASH,
       pinHash: DEFAULT_PIN_HASH,
-      syncUrl: '', // backend URL, e.g. https://your-server:3456
+      ghToken: '',   // GitHub Personal Access Token
+      ghRepo: '',    // e.g. "JujuAntenna/baby-sleep-tracker"
+      ghPath: 'data/sleep-data.json',
+      ghBranch: 'main',
     },
     records: [],
     ratings: {},
@@ -1017,96 +1024,168 @@ function saveSetting(key, val) {
   refreshAll();
 }
 
-// ---- CLOUD SYNC ----
+// ---- GITHUB SYNC ----
 let syncTimeout = null;
 let isSyncing = false;
+let fileSha = null; // GitHub needs the current file SHA to update it
 
-function getSyncUrl() {
-  return (data.settings.syncUrl || '').replace(/\/+$/, '');
+function getGitHubConfig() {
+  return {
+    token: data.settings.ghToken || '',
+    repo: data.settings.ghRepo || '',   // e.g. "JujuAntenna/baby-sleep-tracker"
+    path: data.settings.ghPath || 'data/sleep-data.json',
+    branch: data.settings.ghBranch || 'main',
+  };
 }
 
-function getSyncToken() {
-  // Reuse the URL token from the query string
-  const params = new URLSearchParams(window.location.search);
-  return params.get('key') || '';
+function isGitHubConfigured() {
+  const cfg = getGitHubConfig();
+  return cfg.token && cfg.repo;
 }
 
 function syncToCloud() {
-  // Debounce: wait 2s after last save before syncing
+  if (!isGitHubConfigured()) return;
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = setTimeout(doSyncToCloud, 2000);
 }
 
 async function doSyncToCloud() {
-  const url = getSyncUrl();
-  const token = getSyncToken();
-  if (!url || !token) return;
-
+  if (!isGitHubConfigured()) return;
   if (isSyncing) return;
   isSyncing = true;
   showSyncStatus('syncing');
 
+  const cfg = getGitHubConfig();
+  const payload = {
+    records: data.records,
+    ratings: data.ratings,
+    settings: {
+      morningWake: data.settings.morningWake,
+      bedtime: data.settings.bedtime,
+      babyAgeMonths: data.settings.babyAgeMonths,
+    },
+    lastUpdated: new Date().toISOString(),
+  };
+
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+
   try {
-    const res = await fetch(`${url}/api/data?token=${encodeURIComponent(token)}`, {
+    // If we don't have the SHA yet, fetch it first
+    if (!fileSha) {
+      await fetchFileSha(cfg);
+    }
+
+    const body = {
+      message: `Sync sleep data ${new Date().toISOString().slice(0, 16)}`,
+      content: content,
+      branch: cfg.branch,
+    };
+    if (fileSha) body.sha = fileSha;
+
+    const res = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${cfg.path}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ records: data.records, ratings: data.ratings, settings: {
-        morningWake: data.settings.morningWake,
-        bedtime: data.settings.bedtime,
-        babyAgeMonths: data.settings.babyAgeMonths,
-      }}),
+      headers: {
+        'Authorization': `Bearer ${cfg.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json',
+      },
+      body: JSON.stringify(body),
     });
+
     if (res.ok) {
+      const result = await res.json();
+      fileSha = result.content.sha;
       showSyncStatus('synced');
+    } else if (res.status === 409) {
+      // Conflict — SHA mismatch, refetch and retry once
+      fileSha = null;
+      await fetchFileSha(cfg);
+      isSyncing = false;
+      return doSyncToCloud();
     } else {
+      console.error('GitHub sync failed:', res.status, await res.text());
       showSyncStatus('error');
     }
   } catch (e) {
+    console.error('GitHub sync error:', e);
     showSyncStatus('error');
   } finally {
     isSyncing = false;
   }
 }
 
-async function syncFromCloud() {
-  const url = getSyncUrl();
-  const token = getSyncToken();
-  if (!url || !token) return;
-
-  showSyncStatus('syncing');
+async function fetchFileSha(cfg) {
   try {
-    const res = await fetch(`${url}/api/data?token=${encodeURIComponent(token)}`);
-    if (!res.ok) { showSyncStatus('error'); return; }
-    const json = await res.json();
-    if (json.data) {
-      // Merge: cloud records + local records, deduplicate by id
-      const cloudRecords = json.data.records || [];
-      const localRecords = data.records || [];
-      const merged = new Map();
-      cloudRecords.forEach(r => merged.set(r.id, r));
-      localRecords.forEach(r => {
-        // Local version wins if both exist (more recent edits)
-        merged.set(r.id, r);
-      });
-      data.records = Array.from(merged.values()).sort((a,b) => new Date(a.start) - new Date(b.start));
-
-      // Merge ratings
-      data.ratings = { ...(json.data.ratings || {}), ...data.ratings };
-
-      // Merge schedule settings (cloud as fallback)
-      if (json.data.settings) {
-        if (!data.settings.morningWake) data.settings.morningWake = json.data.settings.morningWake;
-        if (!data.settings.bedtime) data.settings.bedtime = json.data.settings.bedtime;
-        if (!data.settings.babyAgeMonths) data.settings.babyAgeMonths = json.data.settings.babyAgeMonths;
-      }
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      refreshAll();
-      showSyncStatus('synced');
+    const res = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${cfg.path}?ref=${cfg.branch}`, {
+      headers: {
+        'Authorization': `Bearer ${cfg.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+    if (res.ok) {
+      const result = await res.json();
+      fileSha = result.sha;
     } else {
-      showSyncStatus('synced');
+      fileSha = null; // File doesn't exist yet, that's fine
     }
   } catch (e) {
+    fileSha = null;
+  }
+}
+
+async function syncFromCloud() {
+  if (!isGitHubConfigured()) return;
+
+  showSyncStatus('syncing');
+  const cfg = getGitHubConfig();
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${cfg.path}?ref=${cfg.branch}`, {
+      headers: {
+        'Authorization': `Bearer ${cfg.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        // No data file yet — first sync, just push local data up
+        showSyncStatus('synced');
+        doSyncToCloud();
+        return;
+      }
+      showSyncStatus('error');
+      return;
+    }
+
+    const result = await res.json();
+    fileSha = result.sha;
+
+    // Decode base64 content
+    const decoded = decodeURIComponent(escape(atob(result.content.replace(/\n/g, ''))));
+    const cloudData = JSON.parse(decoded);
+
+    // Merge: cloud + local, deduplicate records by id
+    const cloudRecords = cloudData.records || [];
+    const localRecords = data.records || [];
+    const merged = new Map();
+    cloudRecords.forEach(r => merged.set(r.id, r));
+    localRecords.forEach(r => merged.set(r.id, r)); // local wins on conflict
+
+    data.records = Array.from(merged.values()).sort((a,b) => new Date(a.start) - new Date(b.start));
+    data.ratings = { ...(cloudData.ratings || {}), ...data.ratings };
+
+    if (cloudData.settings) {
+      if (!data.settings.morningWake) data.settings.morningWake = cloudData.settings.morningWake;
+      if (!data.settings.bedtime) data.settings.bedtime = cloudData.settings.bedtime;
+      if (!data.settings.babyAgeMonths) data.settings.babyAgeMonths = cloudData.settings.babyAgeMonths;
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    refreshAll();
+    showSyncStatus('synced');
+  } catch (e) {
+    console.error('GitHub fetch error:', e);
     showSyncStatus('error');
   }
 }
@@ -1114,13 +1193,13 @@ async function syncFromCloud() {
 function showSyncStatus(status) {
   const el = document.getElementById('sync-status');
   if (!el) return;
-  if (status === 'syncing') { el.textContent = '🔄'; el.title = 'Syncing...'; }
+  if (status === 'syncing') { el.textContent = '🔄'; el.title = t('syncing'); }
   else if (status === 'synced') {
-    el.textContent = '☁️'; el.title = 'Synced';
+    el.textContent = '☁️'; el.title = t('synced');
     setTimeout(() => { if (el.textContent === '☁️') el.textContent = ''; }, 3000);
   }
   else if (status === 'error') {
-    el.textContent = '⚠️'; el.title = 'Sync failed';
+    el.textContent = '⚠️'; el.title = t('syncFailed');
     setTimeout(() => { if (el.textContent === '⚠️') el.textContent = ''; }, 5000);
   }
   else { el.textContent = ''; }
@@ -1711,7 +1790,8 @@ function initApp() {
   document.getElementById('set-age').value = s.babyAgeMonths;
   document.getElementById('set-token-hash').value = s.tokenHash || DEFAULT_TOKEN_HASH;
   document.getElementById('set-pin-hash').value = s.pinHash || DEFAULT_PIN_HASH;
-  document.getElementById('set-sync-url').value = s.syncUrl || '';
+  document.getElementById('set-gh-token').value = s.ghToken || '';
+  document.getElementById('set-gh-repo').value = s.ghRepo || '';
 
   // Language buttons
   document.getElementById('lang-en').classList.toggle('btn-primary', currentLang === 'en');
