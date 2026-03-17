@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SleepTracker">
+<meta name="theme-color" content="#7c8cbf">
+<link rel="manifest" href="manifest.json">
+<title>Baby Sleep Tracker</title>
+<style>
+/* ============================================
+   CSS - Baby Sleep Tracker
+   ============================================ */
+:root {
+  --bg: #f0f0ff;
+  --bg2: #e8e8f8;
+  --card: #ffffff;
+  --text: #2d2d44;
+  --text2: #6b6b8d;
+  --accent: #7c8cbf;
+  --accent2: #a5b3d9;
+  --sleep: #9b8ec4;
+  --wake: #f4a261;
+  --green: #6bbd7b;
+  --yellow: #e9c46a;
+  --red: #e07a7a;
+  --radius: 16px;
+  --shadow: 0 2px 12px rgba(124,140,191,0.12);
+  --tab-h: 64px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #222240;
+    --card: #2a2a48;
+    --text: #e0e0f0;
+    --text2: #9999bb;
+    --shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: calc(var(--tab-h) + 20px);
+  -webkit-user-select: none; user-select: none;
+}
+.hidden { display: none !important; }
+
+/* Auth screens */
+#auth-screen, #pin-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 20px; text-align: center;
+}
+#auth-screen h1, #pin-screen h1 { font-size: 1.5em; margin-bottom: 8px; }
+#auth-screen p, #pin-screen p { color: var(--text2); margin-bottom: 24px; }
+.pin-input {
+  display: flex; gap: 12px; margin-bottom: 24px;
+}
+.pin-input input {
+  width: 52px; height: 60px; text-align: center; font-size: 24px;
+  border: 2px solid var(--accent2); border-radius: 12px;
+  background: var(--card); color: var(--text);
+  outline: none;
+}
+.pin-input input:focus { border-color: var(--accent); }
+.pin-error { color: var(--red); font-size: 0.9em; min-height: 1.4em; }
+
+/* App header */
+.app-header {
+  background: var(--accent);
+  color: white;
+  padding: 16px 20px 12px;
+  text-align: center;
+  font-size: 1.1em;
+  font-weight: 600;
+  position: sticky; top: 0; z-index: 10;
+}
+
+/* Cards */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin: 12px 16px;
+}
+.card h2 { font-size: 1em; color: var(--text2); margin-bottom: 12px; font-weight: 500; }
+
+/* Status display */
+.status-display {
+  text-align: center; padding: 8px 0;
+}
+.status-emoji { font-size: 48px; margin-bottom: 8px; }
+.status-label { font-size: 0.9em; color: var(--text2); }
+.status-timer { font-size: 2em; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
+
+/* Big action button */
+.action-btn {
+  display: block; width: 100%; padding: 20px;
+  font-size: 1.2em; font-weight: 600;
+  border: none; border-radius: var(--radius);
+  cursor: pointer; margin: 12px 0;
+  transition: transform 0.1s, opacity 0.1s;
+  color: white;
+}
+.action-btn:active { transform: scale(0.97); opacity: 0.9; }
+.action-btn.sleep-btn { background: linear-gradient(135deg, #9b8ec4, #7c8cbf); }
+.action-btn.wake-btn { background: linear-gradient(135deg, #f4a261, #e9c46a); }
+
+/* Time adjust */
+.time-adjust {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  margin: 8px 0;
+}
+.time-adjust button {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 2px solid var(--accent2); background: var(--card); color: var(--text);
+  font-size: 1.1em; cursor: pointer;
+}
+.time-adjust span { font-size: 1.1em; font-weight: 600; min-width: 80px; text-align: center; }
+
+/* Prediction box */
+.prediction-box { text-align: center; }
+.pred-time { font-size: 1.8em; font-weight: 700; color: var(--accent); }
+.pred-range { display: flex; justify-content: space-between; margin: 8px 0; font-size: 0.85em; color: var(--text2); }
+.pred-reason { font-size: 0.85em; color: var(--text2); margin-top: 8px; line-height: 1.4; text-align: left; background: var(--bg); padding: 10px; border-radius: 8px; }
+
+/* Timeline bar */
+.timeline {
+  position: relative; height: 32px; background: var(--bg2);
+  border-radius: 16px; margin: 16px 0; overflow: hidden;
+}
+.timeline .nap-block {
+  position: absolute; top: 4px; bottom: 4px;
+  background: var(--sleep); border-radius: 12px; opacity: 0.8;
+}
+.timeline .pred-block {
+  position: absolute; top: 4px; bottom: 4px;
+  background: var(--accent); border-radius: 12px; opacity: 0.4;
+  border: 2px dashed var(--accent);
+}
+.timeline .now-marker {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--red); z-index: 2;
+}
+.timeline-labels { display: flex; justify-content: space-between; font-size: 0.75em; color: var(--text2); }
+
+/* Pressure indicator */
+.pressure { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
+.pressure.green { background: rgba(107,189,123,0.15); color: var(--green); }
+.pressure.yellow { background: rgba(233,196,106,0.15); color: #c9a030; }
+.pressure.red { background: rgba(224,122,122,0.15); color: var(--red); }
+
+/* Nap decision options */
+.nap-options { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.nap-option {
+  padding: 14px; border-radius: 12px; border: 2px solid var(--bg2);
+  background: var(--bg); cursor: pointer;
+}
+.nap-option.recommended { border-color: var(--accent); }
+.nap-option h3 { font-size: 0.95em; margin-bottom: 4px; }
+.nap-option p { font-size: 0.8em; color: var(--text2); line-height: 1.3; }
+.nap-option .star { color: var(--wake); }
+
+/* Nap list */
+.nap-list { list-style: none; }
+.nap-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--bg2);
+}
+.nap-item:last-child { border-bottom: none; }
+.nap-item .nap-num { font-weight: 600; color: var(--accent); min-width: 60px; }
+.nap-item .nap-times { font-size: 0.9em; flex: 1; }
+.nap-item .nap-dur { font-weight: 600; color: var(--sleep); }
+.nap-item .nap-actions { margin-left: 8px; }
+.nap-item .nap-actions button {
+  background: none; border: none; color: var(--text2); font-size: 1.1em; cursor: pointer; padding: 4px;
+}
+
+/* Morning plan */
+.morning-plan { display: flex; gap: 10px; }
+.plan-col {
+  flex: 1; padding: 12px; background: var(--bg);
+  border-radius: 12px; font-size: 0.85em;
+}
+.plan-col h3 { font-size: 0.9em; margin-bottom: 8px; color: var(--accent); }
+.plan-col .plan-item { padding: 3px 0; }
+
+/* Tab nav */
+.tab-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--tab-h);
+  background: var(--card);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+  display: flex; z-index: 100;
+}
+.tab-nav button {
+  flex: 1; border: none; background: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 0.7em; color: var(--text2); cursor: pointer; gap: 4px;
+  transition: color 0.15s;
+}
+.tab-nav button.active { color: var(--accent); }
+.tab-nav button .tab-icon { font-size: 22px; }
+
+/* Tab content */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* History */
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 8px 0;
+}
+.cal-day {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 0.85em; cursor: pointer;
+  background: var(--bg);
+}
+.cal-day.today { border: 2px solid var(--accent); }
+.cal-day.selected { background: var(--accent); color: white; }
+.cal-day.has-data { background: var(--accent2); color: white; }
+.cal-day.empty { opacity: 0; pointer-events: none; }
+.cal-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 0.75em; color: var(--text2); }
+
+.day-summary { margin-top: 12px; }
+.day-summary .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--bg2); }
+.day-summary .stat:last-child { border-bottom: none; }
+
+/* Rating */
+.rating { display: flex; gap: 8px; justify-content: center; margin: 12px 0; }
+.rating button {
+  font-size: 28px; background: none; border: 2px solid transparent;
+  border-radius: 50%; width: 48px; height: 48px; cursor: pointer;
+  transition: transform 0.15s;
+}
+.rating button.active { border-color: var(--accent); transform: scale(1.15); }
+
+/* Settings */
+.setting-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 0; border-bottom: 1px solid var(--bg2);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-row label { font-weight: 500; }
+.setting-row input[type="time"], .setting-row input[type="number"], .setting-row input[type="text"] {
+  padding: 8px 12px; border: 2px solid var(--accent2); border-radius: 8px;
+  background: var(--bg); color: var(--text); font-size: 1em;
+  width: 120px; text-align: center;
+}
+.btn {
+  padding: 12px 20px; border: none; border-radius: 12px;
+  font-size: 1em; font-weight: 500; cursor: pointer; width: 100%;
+  margin: 6px 0; transition: opacity 0.15s;
+}
+.btn:active { opacity: 0.8; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-danger { background: var(--red); color: white; }
+.btn-outline { background: none; border: 2px solid var(--accent2); color: var(--text); }
+
+/* Help modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200; padding: 20px;
+}
+.modal {
+  background: var(--card); border-radius: var(--radius);
+  padding: 24px; max-width: 400px; width: 100%;
+  max-height: 80vh; overflow-y: auto;
+}
+.modal h2 { margin-bottom: 12px; }
+.modal p { font-size: 0.9em; color: var(--text2); line-height: 1.5; margin-bottom: 8px; }
+.modal-close { margin-top: 16px; }
+
+/* Transition detection banner */
+.banner {
+  margin: 12px 16px; padding: 12px 16px; border-radius: 12px;
+  font-size: 0.85em; line-height: 1.4;
+  background: rgba(124,140,191,0.1); color: var(--accent);
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================
+     AUTH SCREENS
+     ============================================ -->
+<div id="auth-screen">
+  <div class="status-emoji">🔒</div>
+  <h1>Baby Sleep Tracker</h1>
+  <p>Access denied</p>
+</div>
+
+<div id="pin-screen" class="hidden">
+  <div class="status-emoji">💤</div>
+  <h1>Enter PIN</h1>
+  <p>Enter your 4-digit PIN to continue</p>
+  <div class="pin-input" id="pin-container">
+    <input type="tel" maxlength="1" data-idx="0" autocomplete="off">
+    <input type="tel" maxlength="1" data-idx="1" autocomplete="off">
+    <input type="tel" maxlength="1" data-idx="2" autocomplete="off">
+    <input type="tel" maxlength="1" data-idx="3" autocomplete="off">
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<!-- ============================================
+     MAIN APP
+     ============================================ -->
+<div id="app" class="hidden">
+  <div class="app-header">
+    🌙 Baby Sleep Tracker
+    <span style="position:absolute;right:16px;cursor:pointer;font-size:0.9em" onclick="showHelp()">?</span>
+  </div>
+
+  <!-- ===== DASHBOARD TAB ===== -->
+  <div id="tab-dashboard" class="tab-content active">
+
+    <!-- Status -->
+    <div class="card">
+      <div class="status-display">
+        <div class="status-emoji" id="dash-emoji">☀️</div>
+        <div class="status-label" id="dash-label">Awake</div>
+        <div class="status-timer" id="dash-timer">0h 0m</div>
+      </div>
+
+      <!-- Time adjust (shown after action) -->
+      <div class="time-adjust hidden" id="time-adjust">
+        <button onclick="adjustTime(-5)">-5</button>
+        <span id="adjust-time-display">--:--</span>
+        <button onclick="adjustTime(5)">+5</button>
+        <button onclick="confirmAdjust()" style="background:var(--accent);color:white;border-color:var(--accent)">✓</button>
+      </div>
+
+      <!-- Action button -->
+      <button class="action-btn sleep-btn" id="btn-sleep" onclick="recordSleep()">Fell Asleep 😴</button>
+      <button class="action-btn wake-btn hidden" id="btn-wake" onclick="recordWake()">Woke Up ☀️</button>
+    </div>
+
+    <!-- Transition banner -->
+    <div class="banner hidden" id="transition-banner"></div>
+
+    <!-- Prediction -->
+    <div class="card" id="pred-card">
+      <h2>📊 Next Nap Prediction</h2>
+      <div class="prediction-box">
+        <div class="pred-time" id="pred-time">--:--</div>
+        <div class="pred-range">
+          <span>Earliest: <b id="pred-early">--:--</b></span>
+          <span>Sweet spot</span>
+          <span>Latest: <b id="pred-late">--:--</b></span>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="timeline" id="timeline"></div>
+      <div class="timeline-labels">
+        <span id="tl-start">6:30</span>
+        <span id="tl-end">19:00</span>
+      </div>
+
+      <!-- Pressure -->
+      <div style="text-align:center;margin-top:8px">
+        <span class="pressure green" id="pressure">🟢 On track</span>
+      </div>
+
+      <!-- Reasoning -->
+      <div class="pred-reason" id="pred-reason">
+        No data yet — using age-based defaults for 7-month-old.
+      </div>
+    </div>
+
+    <!-- Nap decision (when ambiguous) -->
+    <div class="card hidden" id="nap-decision-card">
+      <h2>🤔 Nap Decision</h2>
+      <div class="nap-options" id="nap-options"></div>
+    </div>
+
+    <!-- Morning plan -->
+    <div class="card" id="morning-plan-card">
+      <h2>📅 Today's Plan</h2>
+      <div class="morning-plan" id="morning-plan"></div>
+    </div>
+
+    <!-- Today's naps -->
+    <div class="card">
+      <h2>Today's Naps</h2>
+      <ul class="nap-list" id="today-naps">
+        <li style="color:var(--text2);padding:10px 0">No naps recorded today</li>
+      </ul>
+    </div>
+
+    <!-- Day rating -->
+    <div class="card">
+      <h2>Rate Today</h2>
+      <div class="rating" id="day-rating">
+        <button onclick="rateDay(1)">😫</button>
+        <button onclick="rateDay(2)">😟</button>
+        <button onclick="rateDay(3)">😐</button>
+        <button onclick="rateDay(4)">😊</button>
+        <button onclick="rateDay(5)">😁</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== HISTORY TAB ===== -->
+  <div id="tab-history" class="tab-content">
+    <div class="card">
+      <h2 id="hist-month-label">March 2026</h2>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <button onclick="histPrevMonth()" style="background:none;border:none;font-size:1.2em;cursor:pointer;color:var(--text)">◀</button>
+        <button onclick="histNextMonth()" style="background:none;border:none;font-size:1.2em;cursor:pointer;color:var(--text)">▶</button>
+      </div>
+      <div class="cal-header">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div class="card" id="hist-detail">
+      <h2 id="hist-day-label">Select a day</h2>
+      <div id="hist-nap-list"></div>
+      <div class="day-summary" id="hist-summary"></div>
+    </div>
+    <div class="card">
+      <h2>Weekly Trend</h2>
+      <div id="weekly-trend" style="font-size:0.9em;color:var(--text2)">Need more data to show trends.</div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS TAB ===== -->
+  <div id="tab-settings" class="tab-content">
+    <div class="card">
+      <h2>⏰ Schedule</h2>
+      <div class="setting-row">
+        <label>Morning wake time</label>
+        <input type="time" id="set-wake" value="06:30" onchange="saveSetting('morningWake',this.value)">
+      </div>
+      <div class="setting-row">
+        <label>Target bedtime</label>
+        <input type="time" id="set-bed" value="19:00" onchange="saveSetting('bedtime',this.value)">
+      </div>
+      <div class="setting-row">
+        <label>Baby age (months)</label>
+        <input type="number" id="set-age" value="7" min="1" max="36" onchange="saveSetting('babyAgeMonths',parseInt(this.value))">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔐 Security</h2>
+      <p style="font-size:0.85em;color:var(--text2);margin-bottom:12px">
+        To change credentials, generate SHA-256 hashes and paste them here.<br>
+        Use: <code>echo -n "yourtoken" | shasum -a 256</code>
+      </p>
+      <div class="setting-row">
+        <label>Token hash</label>
+        <input type="text" id="set-token-hash" style="width:100%;font-size:0.75em" onchange="saveSetting('tokenHash',this.value)">
+      </div>
+      <div class="setting-row">
+        <label>PIN hash</label>
+        <input type="text" id="set-pin-hash" style="width:100%;font-size:0.75em" onchange="saveSetting('pinHash',this.value)">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>💾 Data</h2>
+      <button class="btn btn-outline" onclick="exportData()">Export Data (JSON)</button>
+      <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">Import Data (JSON)</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      <button class="btn btn-danger" onclick="clearData()">Clear All Data</button>
+    </div>
+  </div>
+
+  <!-- Tab nav -->
+  <nav class="tab-nav">
+    <button class="active" onclick="switchTab('dashboard',this)">
+      <span class="tab-icon">🏠</span> Dashboard
+    </button>
+    <button onclick="switchTab('history',this)">
+      <span class="tab-icon">📅</span> History
+    </button>
+    <button onclick="switchTab('settings',this)">
+      <span class="tab-icon">⚙️</span> Settings
+    </button>
+  </nav>
+</div>
+
+<!-- Help Modal -->
+<div class="modal-overlay hidden" id="help-modal" onclick="if(event.target===this)closeHelp()">
+  <div class="modal">
+    <h2>ℹ️ How It Works</h2>
+    <p><b>Prediction:</b> The sweet spot is when your baby is most likely ready for their next nap, based on their actual patterns from the past week combined with age-appropriate wake windows.</p>
+    <p><b>Earliest/Latest:</b> The range is based on how consistent your baby's patterns have been. Wider range = less predictable.</p>
+    <p><b>Schedule Pressure:</b> 🟢 means the day is on track to hit bedtime. 🟡 means things are getting tight. 🔴 means the schedule is off — consider adjusting.</p>
+    <p><b>Nap Decision:</b> When it's unclear whether to squeeze in another nap or go to early bedtime, the app shows both options with trade-offs.</p>
+    <p><b>Morning Plan:</b> At the start of each day, you'll see proposed 2-nap and 3-nap schedules. The app adapts the plan as naps happen.</p>
+    <p><b>Day Rating:</b> Rate each day to help the app learn which patterns work best for your baby.</p>
+    <p><b>Data:</b> Everything is stored locally in your browser. Export regularly as a backup!</p>
+    <button class="btn btn-primary modal-close" onclick="closeHelp()">Got it!</button>
+  </div>
+</div>
+
+<script>
+/* ============================================
+   JAVASCRIPT - Baby Sleep Tracker
+   ============================================ */
+
+// ---- SHA-256 (Web Crypto API) ----
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ---- DEFAULTS ----
+// Default token="demo123" PIN="1234"
+// Generate your own: echo -n "yourvalue" | shasum -a 256
+const DEFAULT_TOKEN_HASH = 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791'; // sha256("demo123")
+const DEFAULT_PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // sha256("1234")
+
+const STORAGE_KEY = 'babySleepData';
+
+// ---- AGE-BASED DEFAULTS (hours) ----
+function getAgeDefaults(months) {
+  // Linear interpolation between known points
+  const profiles = {
+    5:  { nap2: [2.0, 2.25, 3.0],  nap3: [1.75, 2.0, 2.0, 2.25] },
+    6:  { nap2: [2.25, 2.75, 3.25], nap3: [2.0, 2.25, 2.25, 2.5] },
+    7:  { nap2: [2.5, 3.0, 3.5],   nap3: [2.25, 2.5, 2.5, 2.75] },
+    8:  { nap2: [2.75, 3.25, 3.75], nap3: [2.5, 2.75, 2.75, 3.0] },
+    9:  { nap2: [3.0, 3.5, 4.0],   nap3: [2.75, 3.0, 3.0, 3.25] },
+    10: { nap2: [3.25, 3.75, 4.0], nap3: [3.0, 3.0, 3.0, 3.25] },
+    12: { nap2: [3.5, 4.0, 4.5],  nap3: [3.0, 3.25, 3.25, 3.5] },
+  };
+  const ages = Object.keys(profiles).map(Number).sort((a,b) => a - b);
+  let lo = ages[0], hi = ages[ages.length - 1];
+  for (let i = 0; i < ages.length - 1; i++) {
+    if (months >= ages[i] && months <= ages[i+1]) { lo = ages[i]; hi = ages[i+1]; break; }
+  }
+  if (months <= ages[0]) return profiles[ages[0]];
+  if (months >= ages[ages.length-1]) return profiles[ages[ages.length-1]];
+  const t = (months - lo) / (hi - lo);
+  const lerp = (a, b) => a.map((v, i) => v + t * ((b[i]||v) - v));
+  return {
+    nap2: lerp(profiles[lo].nap2, profiles[hi].nap2),
+    nap3: lerp(profiles[lo].nap3, profiles[hi].nap3),
+  };
+}
+
+// ---- DATA MANAGEMENT ----
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return {
+    settings: {
+      morningWake: '06:30',
+      bedtime: '19:00',
+      babyAgeMonths: 7,
+      tokenHash: DEFAULT_TOKEN_HASH,
+      pinHash: DEFAULT_PIN_HASH,
+    },
+    records: [],
+    ratings: {},
+  };
+}
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+let data = loadData();
+
+function getSettings() { return data.settings; }
+function saveSetting(key, val) {
+  data.settings[key] = val;
+  saveData(data);
+  refreshAll();
+}
+
+// ---- UTILITIES ----
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0;
+    return (c==='x'?r:(r&0x3|0x8)).toString(16);
+  });
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseTime(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minsToHM(mins) {
+  const h = Math.floor(Math.abs(mins) / 60);
+  const m = Math.round(Math.abs(mins) % 60);
+  return `${h}h ${m}m`;
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatTimeFromMins(mins) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setMinutes(mins);
+  return formatTime(d);
+}
+
+function dateToMins(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function getRecordsForDate(dateStr) {
+  const dayStart = new Date(dateStr + 'T00:00:00');
+  const dayEnd = new Date(dateStr + 'T23:59:59');
+  return data.records.filter(r => {
+    const s = new Date(r.start);
+    return s >= dayStart && s <= dayEnd;
+  }).sort((a,b) => new Date(a.start) - new Date(b.start));
+}
+
+function getTodayRecords() {
+  return getRecordsForDate(todayStr());
+}
+
+function isCurrentlySleeping() {
+  return data.records.some(r => r.end === null);
+}
+
+function getCurrentSleepRecord() {
+  return data.records.find(r => r.end === null);
+}
+
+// ---- AUTH ----
+async function checkAuth() {
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get('key');
+  if (!key) { showScreen('auth-screen'); return; }
+
+  const keyHash = await sha256(key);
+  const tokenHash = data.settings.tokenHash || DEFAULT_TOKEN_HASH;
+  if (keyHash !== tokenHash) { showScreen('auth-screen'); return; }
+
+  // Token valid — check session
+  if (sessionStorage.getItem('bs_auth') === 'true') {
+    showScreen('app');
+    initApp();
+    return;
+  }
+  showScreen('pin-screen');
+  initPinInput();
+}
+
+function showScreen(id) {
+  ['auth-screen', 'pin-screen', 'app'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+function initPinInput() {
+  const inputs = document.querySelectorAll('#pin-container input');
+  inputs[0].focus();
+  inputs.forEach((inp, i) => {
+    inp.value = '';
+    inp.addEventListener('input', () => {
+      if (inp.value.length === 1 && i < 3) inputs[i+1].focus();
+      if (i === 3 && inp.value.length === 1) checkPin();
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i-1].focus();
+    });
+  });
+}
+
+async function checkPin() {
+  const inputs = document.querySelectorAll('#pin-container input');
+  const pin = Array.from(inputs).map(i => i.value).join('');
+  if (pin.length !== 4) return;
+
+  const pinHash = await sha256(pin);
+  const storedHash = data.settings.pinHash || DEFAULT_PIN_HASH;
+  if (pinHash === storedHash) {
+    sessionStorage.setItem('bs_auth', 'true');
+    showScreen('app');
+    initApp();
+  } else {
+    document.getElementById('pin-error').textContent = 'Wrong PIN. Try again.';
+    inputs.forEach(i => { i.value = ''; });
+    inputs[0].focus();
+    setTimeout(() => { document.getElementById('pin-error').textContent = ''; }, 2000);
+  }
+}
+
+
+// ============================================
+// PREDICTION ENGINE
+// ============================================
+
+// ---- Layer 1: Positional Wake Windows ----
+function getHistoricalWakeWindows(days) {
+  // Returns { byPosition: { 1: [mins,...], 2: [...], ... }, byDay: [...] }
+  const result = { byPosition: {}, byDay: [] };
+  const now = new Date();
+  for (let d = 0; d < days; d++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() - d);
+    const dateStr = dt.toISOString().slice(0,10);
+    const recs = getRecordsForDate(dateStr);
+    if (recs.length === 0) continue;
+
+    const s = getSettings();
+    const wakeMins = parseTime(s.morningWake);
+    const morningWake = new Date(dateStr + 'T00:00:00');
+    morningWake.setMinutes(wakeMins);
+
+    let dayData = { date: dateStr, napCount: recs.length, wakeWindows: [], napDurations: [] };
+
+    for (let i = 0; i < recs.length; i++) {
+      const napStart = new Date(recs[i].start);
+      const napEnd = recs[i].end ? new Date(recs[i].end) : null;
+      const prevEnd = i === 0 ? morningWake : (recs[i-1].end ? new Date(recs[i-1].end) : null);
+
+      if (prevEnd) {
+        const ww = (napStart - prevEnd) / 60000; // minutes
+        if (ww > 0 && ww < 600) { // sanity check: < 10 hours
+          const pos = i + 1;
+          if (!result.byPosition[pos]) result.byPosition[pos] = [];
+          result.byPosition[pos].push({ mins: ww, daysAgo: d, napDur: null });
+          dayData.wakeWindows.push(ww);
+        }
+      }
+      if (napEnd) {
+        const dur = (napEnd - napStart) / 60000;
+        dayData.napDurations.push(dur);
+        // Attach nap duration to the wake window entry for Layer 2
+        if (result.byPosition[i+1]) {
+          const entries = result.byPosition[i+1];
+          if (entries.length > 0) entries[entries.length-1].napDur = dur;
+        }
+      }
+    }
+    result.byDay.push(dayData);
+  }
+  return result;
+}
+
+function getWeightedAvgWakeWindow(entries) {
+  // Weight recent days more: weight = 1 / (1 + daysAgo * 0.3)
+  if (!entries || entries.length === 0) return null;
+  let sumW = 0, sumV = 0;
+  entries.forEach(e => {
+    const w = 1 / (1 + e.daysAgo * 0.3);
+    sumW += w;
+    sumV += e.mins * w;
+  });
+  return sumV / sumW;
+}
+
+function getStdDev(entries) {
+  if (!entries || entries.length < 2) return 20; // default 20 min
+  const avg = entries.reduce((s,e) => s + e.mins, 0) / entries.length;
+  const variance = entries.reduce((s,e) => s + (e.mins - avg) ** 2, 0) / entries.length;
+  return Math.sqrt(variance);
+}
+
+// ---- Layer 2: Nap Duration Adjustment ----
+function napDurationAdjustment(prevNapMins) {
+  if (prevNapMins === null || prevNapMins === undefined) return 1.0;
+  if (prevNapMins < 40) return 0.82; // short nap: reduce WW by ~18%
+  if (prevNapMins > 80) return 1.10; // long nap: extend WW by 10%
+  return 1.0;
+}
+
+// ---- Layer 3: Sleep Debt ----
+function getSleepDebt() {
+  const hist = getHistoricalWakeWindows(7);
+  if (hist.byDay.length < 2) return 0;
+
+  // Average daily total nap time from history
+  const pastDays = hist.byDay.filter(d => d.date !== todayStr());
+  if (pastDays.length === 0) return 0;
+  const avgDailyNap = pastDays.reduce((s, d) => s + d.napDurations.reduce((a,b) => a+b, 0), 0) / pastDays.length;
+
+  // Today's total nap time
+  const todayRecs = getTodayRecords();
+  const todayNap = todayRecs.reduce((s, r) => {
+    if (r.end) return s + (new Date(r.end) - new Date(r.start)) / 60000;
+    return s;
+  }, 0);
+
+  return avgDailyNap - todayNap; // positive = debt
+}
+
+// ---- Layer 4: Transition Detection ----
+function getTransitionInfo() {
+  const hist = getHistoricalWakeWindows(14);
+  if (hist.byDay.length < 5) return { twoNapPct: 50, note: null };
+
+  const twoDays = hist.byDay.filter(d => d.napCount <= 2).length;
+  const pct = Math.round(twoDays / hist.byDay.length * 100);
+
+  let note = null;
+  if (pct >= 60) note = `Trending toward 2 naps — ${pct}% of recent days were 2-nap days.`;
+  else if (pct <= 30) note = `Solidly on 3 naps — only ${pct}% of recent days were 2-nap days.`;
+
+  return { twoNapPct: pct, note };
+}
+
+// ---- Layer 5: Clock Anchoring ----
+function getClockAnchors(days) {
+  const result = {};
+  const now = new Date();
+  for (let d = 0; d < days; d++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() - d);
+    const dateStr = dt.toISOString().slice(0,10);
+    const recs = getRecordsForDate(dateStr);
+    recs.forEach((r, i) => {
+      const pos = i + 1;
+      if (!result[pos]) result[pos] = [];
+      const startMins = dateToMins(new Date(r.start));
+      result[pos].push(startMins);
+    });
+  }
+  // Average clock time per position
+  const anchors = {};
+  for (const pos in result) {
+    if (result[pos].length > 0) {
+      anchors[pos] = result[pos].reduce((a,b) => a+b, 0) / result[pos].length;
+    }
+  }
+  return anchors;
+}
+
+// ---- Layer 6: Schedule Framing ----
+function getScheduleBounds() {
+  const s = getSettings();
+  return {
+    wakeMins: parseTime(s.morningWake),
+    bedMins: parseTime(s.bedtime),
+    totalDayMins: parseTime(s.bedtime) - parseTime(s.morningWake),
+  };
+}
+
+// ---- Cold Start Blending ----
+function getDataWeight() {
+  const hist = getHistoricalWakeWindows(14);
+  const days = hist.byDay.length;
+  if (days <= 1) return 0.2;
+  if (days <= 3) return 0.2 + (days - 1) * 0.15; // 0.2 → 0.5
+  if (days <= 7) return 0.5 + (days - 3) * 0.075; // 0.5 → 0.8
+  return Math.min(0.95, 0.8 + (days - 7) * 0.02);
+}
+
+// ---- MAIN PREDICTION FUNCTION ----
+function computePrediction() {
+  const s = getSettings();
+  const bounds = getScheduleBounds();
+  const todayRecs = getTodayRecords();
+  const hist = getHistoricalWakeWindows(7);
+  const defaults = getAgeDefaults(s.babyAgeMonths);
+  const transition = getTransitionInfo();
+  const clockAnchors = getClockAnchors(14);
+  const dataWeight = getDataWeight();
+  const sleepDebt = getSleepDebt();
+  const sleeping = isCurrentlySleeping();
+
+  const now = new Date();
+  const nowMins = dateToMins(now);
+
+  // Determine what nap we're predicting
+  const completedNaps = todayRecs.filter(r => r.end !== null);
+  const nextNapPos = completedNaps.length + 1; // position of next nap
+  const isMorning = completedNaps.length === 0 && !sleeping;
+
+  // What time did baby last wake?
+  let lastWakeMins;
+  if (completedNaps.length > 0) {
+    lastWakeMins = dateToMins(new Date(completedNaps[completedNaps.length - 1].end));
+  } else {
+    lastWakeMins = bounds.wakeMins;
+  }
+
+  // Previous nap duration (for Layer 2)
+  let prevNapDur = null;
+  if (completedNaps.length > 0) {
+    const last = completedNaps[completedNaps.length - 1];
+    prevNapDur = (new Date(last.end) - new Date(last.start)) / 60000;
+  }
+
+  // If currently sleeping, predict wake time instead
+  if (sleeping) {
+    const sleepRec = getCurrentSleepRecord();
+    const sleepStart = new Date(sleepRec.start);
+    // Average nap duration for this position
+    const pos = completedNaps.length + 1;
+    const avgDur = getAvgNapDuration(pos, hist) || 60; // default 60 min
+    const predWake = new Date(sleepStart.getTime() + avgDur * 60000);
+    return {
+      type: 'wake',
+      time: predWake,
+      timeMins: dateToMins(predWake),
+      sleeping: true,
+      reasons: ['Currently sleeping. Expected wake based on average nap duration.'],
+      pressure: null,
+      napDecision: null,
+      morningPlan: null,
+    };
+  }
+
+  // ---- Interval-based prediction ----
+  // Blend 2-nap and 3-nap defaults based on transition trend
+  const blend3 = (100 - transition.twoNapPct) / 100;
+  const blend2 = transition.twoNapPct / 100;
+
+  let defaultWW;
+  if (nextNapPos <= 3 && defaults.nap3[nextNapPos - 1] !== undefined) {
+    const ww3 = defaults.nap3[nextNapPos - 1] * 60; // to minutes
+    const ww2 = (defaults.nap2[nextNapPos - 1] || defaults.nap2[defaults.nap2.length - 1]) * 60;
+    defaultWW = blend2 * ww2 + blend3 * ww3;
+  } else {
+    defaultWW = (defaults.nap2[defaults.nap2.length - 1] || 3.5) * 60;
+  }
+
+  // Historical WW for this position
+  const histEntries = hist.byPosition[nextNapPos];
+  const histAvg = getWeightedAvgWakeWindow(histEntries);
+  const stddev = getStdDev(histEntries);
+
+  // Blend historical and defaults
+  let baseWW;
+  if (histAvg !== null) {
+    baseWW = dataWeight * histAvg + (1 - dataWeight) * defaultWW;
+  } else {
+    baseWW = defaultWW;
+  }
+
+  // Layer 2: Nap duration adjustment
+  const napAdj = napDurationAdjustment(prevNapDur);
+  baseWW *= napAdj;
+
+  // Layer 3: Sleep debt
+  let debtAdj = 0;
+  if (sleepDebt > 30) debtAdj = -15;
+  else if (sleepDebt > 15) debtAdj = -8;
+
+  let intervalPred = lastWakeMins + baseWW + debtAdj;
+
+  // ---- Layer 5: Clock anchoring ----
+  let clockPred = intervalPred;
+  if (clockAnchors[nextNapPos]) {
+    const clockDays = Object.values(clockAnchors).flat ? hist.byDay.length : 7;
+    const clockWeight = Math.min(0.5, 0.3 + clockDays * 0.015);
+    clockPred = (1 - clockWeight) * intervalPred + clockWeight * clockAnchors[nextNapPos];
+  }
+
+  // ---- Layer 6: Bidirectional — constrain against bedtime ----
+  // Last WW before bed should be at least min_last_ww
+  const minLastWW = (defaults.nap2[defaults.nap2.length - 1] || 3) * 60 * 0.8; // 80% of default last WW
+  const latestNapEnd = bounds.bedMins - minLastWW;
+  // Estimate nap duration
+  const avgNapDur = getAvgNapDuration(nextNapPos, hist) || 50;
+  const latestNapStart = latestNapEnd - avgNapDur;
+
+  let prediction = Math.min(clockPred, latestNapStart);
+  prediction = Math.max(prediction, nowMins + 5); // at least 5 min from now
+
+  // ---- Confidence range ----
+  const earliest = Math.max(prediction - Math.min(stddev, 20), nowMins + 3);
+  const latest = Math.min(prediction + Math.min(stddev, 25), latestNapStart + 10);
+
+  // ---- Layer 7: Dynamic Nap Count Decision ----
+  let napDecision = null;
+  const timeUntilBed = bounds.bedMins - nowMins;
+  const nextWW = baseWW;
+  const minNapDur = 20;
+  const neededForOneMore = nextWW + minNapDur + minLastWW;
+
+  if (completedNaps.length >= 2) {
+    const canFit = timeUntilBed >= neededForOneMore;
+    const totalNapToday = completedNaps.reduce((s, r) =>
+      s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
+
+    const avgDailyNap = getAvgDailyNapTime(hist);
+    const napDeficit = avgDailyNap - totalNapToday;
+    const lastNapWasShort = prevNapDur !== null && prevNapDur < 40;
+
+    // Score: higher = more reason to take another nap
+    let score = 0;
+    if (canFit) score += 2;
+    if (napDeficit > 30) score += 2;
+    if (lastNapWasShort) score += 1;
+    if (transition.twoNapPct < 40) score += 1; // still mostly 3-nap
+    if (timeUntilBed < neededForOneMore + 30) score -= 1; // tight squeeze
+
+    const takeNap = score >= 3;
+    const skipBedtime = lastWakeMins + minLastWW;
+    const napTime = prediction;
+    const cappedNapEnd = Math.min(napTime + avgNapDur, latestNapEnd);
+    const napBedtime = cappedNapEnd + minLastWW;
+
+    if (canFit && score >= 2 && score <= 4) {
+      // Ambiguous — show both options
+      napDecision = {
+        ambiguous: true,
+        recommended: takeNap ? 'take' : 'skip',
+        takeOption: {
+          napTime: napTime,
+          napEnd: cappedNapEnd,
+          bedtime: Math.min(napBedtime, bounds.bedMins + 30),
+          reason: buildNapReason(true, napDeficit, lastNapWasShort, canFit, transition),
+        },
+        skipOption: {
+          bedtime: Math.min(skipBedtime, bounds.bedMins + 15),
+          lastWW: skipBedtime - lastWakeMins,
+          reason: buildNapReason(false, napDeficit, lastNapWasShort, canFit, transition),
+        },
+      };
+    } else if (!canFit) {
+      napDecision = { ambiguous: false, action: 'skip', bedtime: Math.min(skipBedtime, bounds.bedMins + 20) };
+    }
+  }
+
+  // ---- Layer 8: Schedule Pressure ----
+  const remainingNaps = estimateRemainingNaps(completedNaps.length, bounds, nowMins, defaults, transition);
+  const estRemainingSleep = remainingNaps * (avgNapDur || 50);
+  const estRemainingWake = remainingNaps * baseWW + minLastWW;
+  const pressure = timeUntilBed - (estRemainingSleep + estRemainingWake);
+
+  let pressureLevel;
+  if (pressure > 30) pressureLevel = 'green';
+  else if (pressure > -15) pressureLevel = 'yellow';
+  else pressureLevel = 'red';
+
+  // ---- Build reasoning ----
+  const reasons = [];
+  reasons.push(`Wake window #${nextNapPos}: ${Math.round(baseWW)} min`);
+  if (napAdj !== 1.0) {
+    reasons.push(prevNapDur < 40 ?
+      `Shortened for short nap (${Math.round(prevNapDur)}min)` :
+      `Extended for long nap (${Math.round(prevNapDur)}min)`);
+  }
+  if (debtAdj) reasons.push(`Sleep debt adjustment: ${debtAdj}min`);
+  if (histAvg) reasons.push(`Based on ${histEntries.length} data points (${Math.round(dataWeight*100)}% from your data)`);
+  else reasons.push(`Using age defaults for ${s.babyAgeMonths}-month-old`);
+  if (transition.note) reasons.push(transition.note);
+
+  // ---- Morning Plan (Layer 10) ----
+  let morningPlan = null;
+  if (isMorning || completedNaps.length === 0) {
+    morningPlan = buildMorningPlan(bounds, defaults, transition, hist);
+  }
+
+  return {
+    type: 'nap',
+    time: minsToDate(prediction),
+    timeMins: prediction,
+    earliest: minsToDate(earliest),
+    earliestMins: earliest,
+    latest: minsToDate(latest),
+    latestMins: latest,
+    sleeping: false,
+    napPosition: nextNapPos,
+    reasons,
+    pressureLevel,
+    pressureValue: pressure,
+    napDecision,
+    morningPlan,
+    transitionNote: transition.note,
+  };
+}
+
+function getAvgNapDuration(position, hist) {
+  const durations = [];
+  hist.byDay.forEach(d => {
+    if (d.napDurations[position - 1]) durations.push(d.napDurations[position - 1]);
+  });
+  if (durations.length === 0) return null;
+  return durations.reduce((a,b) => a+b, 0) / durations.length;
+}
+
+function getAvgDailyNapTime(hist) {
+  const pastDays = hist.byDay.filter(d => d.date !== todayStr());
+  if (pastDays.length === 0) return 150; // default 2.5h
+  return pastDays.reduce((s, d) => s + d.napDurations.reduce((a,b) => a+b, 0), 0) / pastDays.length;
+}
+
+function estimateRemainingNaps(completed, bounds, nowMins, defaults, transition) {
+  const remaining = bounds.bedMins - nowMins;
+  const avgWW = ((defaults.nap2[1] || 3) * 60 + (defaults.nap3[1] || 2.5) * 60) / 2;
+  const avgNap = 50;
+  const canFit = Math.floor(remaining / (avgWW + avgNap));
+  if (completed >= 2 && transition.twoNapPct > 60) return Math.min(canFit, 0);
+  return Math.max(0, Math.min(canFit, 3 - completed));
+}
+
+function buildNapReason(isForTaking, deficit, shortNap, canFit, transition) {
+  const parts = [];
+  if (isForTaking) {
+    if (deficit > 30) parts.push(`Sleep deficit of ${Math.round(deficit)}min`);
+    if (shortNap) parts.push('Previous nap was short');
+    if (canFit) parts.push('Time available before bedtime');
+  } else {
+    if (deficit <= 10) parts.push('Good total sleep today');
+    if (!shortNap) parts.push('Last nap was solid');
+    if (transition.twoNapPct > 50) parts.push(`Trending toward 2 naps (${transition.twoNapPct}%)`);
+  }
+  return parts.join('. ') + '.';
+}
+
+function buildMorningPlan(bounds, defaults, transition, hist) {
+  const wake = bounds.wakeMins;
+  const bed = bounds.bedMins;
+
+  // 2-nap plan
+  const plan2 = [];
+  let t = wake;
+  for (let i = 0; i < 2; i++) {
+    const ww = defaults.nap2[i] * 60;
+    const napStart = t + ww;
+    const napDur = i === 0 ? 75 : 90; // defaults
+    plan2.push({ start: napStart, end: napStart + napDur, label: `Nap ${i+1}` });
+    t = napStart + napDur;
+  }
+  plan2.push({ start: bed, end: bed, label: 'Bedtime' });
+
+  // 3-nap plan
+  const plan3 = [];
+  t = wake;
+  for (let i = 0; i < 3; i++) {
+    const ww = defaults.nap3[i] * 60;
+    const napStart = t + ww;
+    const napDur = i < 2 ? 65 : 30; // last nap is short
+    plan3.push({ start: napStart, end: napStart + napDur, label: `Nap ${i+1}` });
+    t = napStart + napDur;
+  }
+  plan3.push({ start: bed, end: bed, label: 'Bedtime' });
+
+  return { plan2, plan3, twoNapPct: transition.twoNapPct };
+}
+
+function minsToDate(mins) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setMinutes(Math.round(mins));
+  return d;
+}
+
+
+// ============================================
+// UI LOGIC
+// ============================================
+
+let timerInterval = null;
+let adjustingRecordId = null;
+let adjustingField = null;
+let adjustDate = null;
+let histYear, histMonth, histSelectedDate;
+
+// ---- INIT ----
+function initApp() {
+  const s = getSettings();
+  document.getElementById('set-wake').value = s.morningWake;
+  document.getElementById('set-bed').value = s.bedtime;
+  document.getElementById('set-age').value = s.babyAgeMonths;
+  document.getElementById('set-token-hash').value = s.tokenHash || DEFAULT_TOKEN_HASH;
+  document.getElementById('set-pin-hash').value = s.pinHash || DEFAULT_PIN_HASH;
+
+  const now = new Date();
+  histYear = now.getFullYear();
+  histMonth = now.getMonth();
+  histSelectedDate = todayStr();
+
+  refreshAll();
+  startTimer();
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+function refreshAll() {
+  renderDashboard();
+  renderHistory();
+  renderRating();
+}
+
+// ---- TIMER ----
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+  updateTimer();
+}
+
+function updateTimer() {
+  const sleeping = isCurrentlySleeping();
+  const emoji = document.getElementById('dash-emoji');
+  const label = document.getElementById('dash-label');
+  const timer = document.getElementById('dash-timer');
+  const btnSleep = document.getElementById('btn-sleep');
+  const btnWake = document.getElementById('btn-wake');
+
+  if (sleeping) {
+    const rec = getCurrentSleepRecord();
+    const elapsed = (Date.now() - new Date(rec.start).getTime()) / 60000;
+    emoji.textContent = '😴';
+    label.textContent = 'Sleeping';
+    timer.textContent = minsToHM(elapsed);
+    btnSleep.classList.add('hidden');
+    btnWake.classList.remove('hidden');
+  } else {
+    const todayRecs = getTodayRecords();
+    const completedNaps = todayRecs.filter(r => r.end !== null);
+    let lastWake;
+    if (completedNaps.length > 0) {
+      lastWake = new Date(completedNaps[completedNaps.length - 1].end);
+    } else {
+      const s = getSettings();
+      const wakeMins = parseTime(s.morningWake);
+      lastWake = new Date();
+      lastWake.setHours(0, 0, 0, 0);
+      lastWake.setMinutes(wakeMins);
+      if (lastWake > new Date()) lastWake = new Date(); // don't show future
+    }
+    const elapsed = (Date.now() - lastWake.getTime()) / 60000;
+    emoji.textContent = '☀️';
+    label.textContent = 'Awake';
+    timer.textContent = minsToHM(Math.max(0, elapsed));
+    btnSleep.classList.remove('hidden');
+    btnWake.classList.add('hidden');
+  }
+}
+
+// ---- RECORD SLEEP / WAKE ----
+function recordSleep() {
+  const rec = { id: uuid(), start: new Date().toISOString(), end: null };
+  data.records.push(rec);
+  saveData(data);
+  showTimeAdjust(rec.id, 'start', new Date(rec.start));
+  refreshAll();
+}
+
+function recordWake() {
+  const rec = getCurrentSleepRecord();
+  if (!rec) return;
+  rec.end = new Date().toISOString();
+  saveData(data);
+  showTimeAdjust(rec.id, 'end', new Date(rec.end));
+  refreshAll();
+}
+
+function showTimeAdjust(recId, field, date) {
+  adjustingRecordId = recId;
+  adjustingField = field;
+  adjustDate = new Date(date);
+  document.getElementById('time-adjust').classList.remove('hidden');
+  document.getElementById('adjust-time-display').textContent = formatTime(adjustDate);
+}
+
+function adjustTime(delta) {
+  if (!adjustDate) return;
+  adjustDate.setMinutes(adjustDate.getMinutes() + delta);
+  document.getElementById('adjust-time-display').textContent = formatTime(adjustDate);
+}
+
+function confirmAdjust() {
+  if (!adjustingRecordId) return;
+  const rec = data.records.find(r => r.id === adjustingRecordId);
+  if (rec) {
+    rec[adjustingField] = adjustDate.toISOString();
+    saveData(data);
+  }
+  document.getElementById('time-adjust').classList.add('hidden');
+  adjustingRecordId = null;
+  refreshAll();
+}
+
+function deleteRecord(id) {
+  if (!confirm('Delete this nap record?')) return;
+  data.records = data.records.filter(r => r.id !== id);
+  saveData(data);
+  refreshAll();
+}
+
+// ---- RENDER DASHBOARD ----
+function renderDashboard() {
+  const pred = computePrediction();
+  const todayRecs = getTodayRecords();
+  const bounds = getScheduleBounds();
+
+  // Prediction card
+  const predCard = document.getElementById('pred-card');
+  if (pred.sleeping) {
+    document.getElementById('pred-time').textContent = `Wake ~${formatTime(pred.time)}`;
+    document.getElementById('pred-early').textContent = '--';
+    document.getElementById('pred-late').textContent = '--';
+    document.getElementById('pred-reason').textContent = pred.reasons.join(' ');
+    document.getElementById('pressure').className = 'pressure green';
+    document.getElementById('pressure').textContent = '😴 Sleeping';
+  } else {
+    document.getElementById('pred-time').textContent = formatTime(pred.time);
+    document.getElementById('pred-early').textContent = pred.earliest ? formatTime(pred.earliest) : '--';
+    document.getElementById('pred-late').textContent = pred.latest ? formatTime(pred.latest) : '--';
+    document.getElementById('pred-reason').textContent = pred.reasons.join('\n');
+
+    const pEl = document.getElementById('pressure');
+    if (pred.pressureLevel === 'green') { pEl.className = 'pressure green'; pEl.textContent = '🟢 On track'; }
+    else if (pred.pressureLevel === 'yellow') { pEl.className = 'pressure yellow'; pEl.textContent = '🟡 Getting tight'; }
+    else { pEl.className = 'pressure red'; pEl.textContent = '🔴 Off schedule'; }
+  }
+
+  // Timeline
+  renderTimeline(todayRecs, pred, bounds);
+
+  // Transition banner
+  const banner = document.getElementById('transition-banner');
+  if (pred.transitionNote) {
+    banner.textContent = '🔄 ' + pred.transitionNote;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+
+  // Nap decision card
+  const decCard = document.getElementById('nap-decision-card');
+  const decEl = document.getElementById('nap-options');
+  if (pred.napDecision && pred.napDecision.ambiguous) {
+    decCard.classList.remove('hidden');
+    const d = pred.napDecision;
+    decEl.innerHTML = `
+      <div class="nap-option ${d.recommended === 'take' ? 'recommended' : ''}">
+        <h3>${d.recommended === 'take' ? '⭐ ' : ''}Take another nap</h3>
+        <p>Nap at ${formatTimeFromMins(d.takeOption.napTime)} → wake by ${formatTimeFromMins(d.takeOption.napEnd)}</p>
+        <p>Bedtime: ~${formatTimeFromMins(d.takeOption.bedtime)}</p>
+        <p>${d.takeOption.reason}</p>
+      </div>
+      <div class="nap-option ${d.recommended === 'skip' ? 'recommended' : ''}">
+        <h3>${d.recommended === 'skip' ? '⭐ ' : ''}Skip nap, early bedtime</h3>
+        <p>Bedtime at ${formatTimeFromMins(d.skipOption.bedtime)}</p>
+        <p>Last wake window: ${minsToHM(d.skipOption.lastWW)}</p>
+        <p>${d.skipOption.reason}</p>
+      </div>
+    `;
+  } else if (pred.napDecision && !pred.napDecision.ambiguous && pred.napDecision.action === 'skip') {
+    decCard.classList.remove('hidden');
+    decEl.innerHTML = `
+      <div class="nap-option recommended">
+        <h3>⭐ Skip nap — go to bedtime</h3>
+        <p>Not enough time for another nap. Bedtime at ${formatTimeFromMins(pred.napDecision.bedtime)}.</p>
+      </div>
+    `;
+  } else {
+    decCard.classList.add('hidden');
+  }
+
+  // Morning plan
+  const planCard = document.getElementById('morning-plan-card');
+  const planEl = document.getElementById('morning-plan');
+  if (pred.morningPlan) {
+    planCard.classList.remove('hidden');
+    const mp = pred.morningPlan;
+    const formatPlan = (plan) => plan.map(p =>
+      `<div class="plan-item">${p.label}: ${formatTimeFromMins(p.start)}${p.end !== p.start ? ` – ${formatTimeFromMins(p.end)}` : ''}</div>`
+    ).join('');
+    planEl.innerHTML = `
+      <div class="plan-col">
+        <h3>2-Nap Day ${mp.twoNapPct > 50 ? '⭐' : ''}</h3>
+        ${formatPlan(mp.plan2)}
+      </div>
+      <div class="plan-col">
+        <h3>3-Nap Day ${mp.twoNapPct <= 50 ? '⭐' : ''}</h3>
+        ${formatPlan(mp.plan3)}
+      </div>
+    `;
+  } else {
+    planCard.classList.add('hidden');
+  }
+
+  // Today's naps list
+  const napList = document.getElementById('today-naps');
+  if (todayRecs.length === 0) {
+    napList.innerHTML = '<li style="color:var(--text2);padding:10px 0">No naps recorded today</li>';
+  } else {
+    napList.innerHTML = todayRecs.map((r, i) => {
+      const start = new Date(r.start);
+      const end = r.end ? new Date(r.end) : null;
+      const dur = end ? minsToHM((end - start) / 60000) : 'sleeping...';
+      return `
+        <li class="nap-item">
+          <span class="nap-num">Nap ${i+1}</span>
+          <span class="nap-times">${formatTime(start)} – ${end ? formatTime(end) : 'now'}</span>
+          <span class="nap-dur">${dur}</span>
+          <span class="nap-actions"><button onclick="deleteRecord('${r.id}')">🗑</button></span>
+        </li>`;
+    }).join('');
+  }
+}
+
+// ---- TIMELINE ----
+function renderTimeline(records, pred, bounds) {
+  const tl = document.getElementById('timeline');
+  const totalMins = bounds.bedMins - bounds.wakeMins;
+  if (totalMins <= 0) { tl.innerHTML = ''; return; }
+
+  const pct = (mins) => Math.max(0, Math.min(100, ((mins - bounds.wakeMins) / totalMins) * 100));
+
+  let html = '';
+
+  // Nap blocks
+  records.forEach(r => {
+    const startM = dateToMins(new Date(r.start));
+    const endM = r.end ? dateToMins(new Date(r.end)) : dateToMins(new Date());
+    html += `<div class="nap-block" style="left:${pct(startM)}%;width:${Math.max(1, pct(endM)-pct(startM))}%"></div>`;
+  });
+
+  // Predicted nap block
+  if (!pred.sleeping && pred.timeMins) {
+    const avgDur = 50; // rough estimate for visual
+    html += `<div class="pred-block" style="left:${pct(pred.timeMins)}%;width:${Math.max(1, pct(pred.timeMins + avgDur) - pct(pred.timeMins))}%"></div>`;
+  }
+
+  // Now marker
+  const nowMins = dateToMins(new Date());
+  if (nowMins >= bounds.wakeMins && nowMins <= bounds.bedMins) {
+    html += `<div class="now-marker" style="left:${pct(nowMins)}%"></div>`;
+  }
+
+  tl.innerHTML = html;
+  document.getElementById('tl-start').textContent = formatTimeFromMins(bounds.wakeMins);
+  document.getElementById('tl-end').textContent = formatTimeFromMins(bounds.bedMins);
+}
+
+// ---- RATING ----
+function renderRating() {
+  const today = todayStr();
+  const rating = data.ratings[today];
+  document.querySelectorAll('#day-rating button').forEach((btn, i) => {
+    btn.classList.toggle('active', rating === (i + 1));
+  });
+}
+
+function rateDay(score) {
+  data.ratings[todayStr()] = score;
+  saveData(data);
+  renderRating();
+}
+
+// ---- HISTORY ----
+function renderHistory() {
+  const label = document.getElementById('hist-month-label');
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  label.textContent = `${months[histMonth]} ${histYear}`;
+
+  const grid = document.getElementById('cal-grid');
+  const firstDay = new Date(histYear, histMonth, 1).getDay();
+  const daysInMonth = new Date(histYear, histMonth + 1, 0).getDate();
+  const today = todayStr();
+
+  let html = '';
+  // Empty cells
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${histYear}-${String(histMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const recs = getRecordsForDate(dateStr);
+    const isToday = dateStr === today;
+    const isSelected = dateStr === histSelectedDate;
+    const hasData = recs.length > 0;
+    const classes = ['cal-day'];
+    if (isToday) classes.push('today');
+    if (isSelected) classes.push('selected');
+    else if (hasData) classes.push('has-data');
+    html += `<div class="${classes.join(' ')}" onclick="selectHistDate('${dateStr}')">${d}</div>`;
+  }
+  grid.innerHTML = html;
+
+  renderHistDetail();
+}
+
+function selectHistDate(dateStr) {
+  histSelectedDate = dateStr;
+  renderHistory();
+}
+
+function histPrevMonth() {
+  histMonth--;
+  if (histMonth < 0) { histMonth = 11; histYear--; }
+  renderHistory();
+}
+
+function histNextMonth() {
+  histMonth++;
+  if (histMonth > 11) { histMonth = 0; histYear++; }
+  renderHistory();
+}
+
+function renderHistDetail() {
+  const dateStr = histSelectedDate;
+  const label = document.getElementById('hist-day-label');
+  const listEl = document.getElementById('hist-nap-list');
+  const summaryEl = document.getElementById('hist-summary');
+
+  if (!dateStr) {
+    label.textContent = 'Select a day';
+    listEl.innerHTML = '';
+    summaryEl.innerHTML = '';
+    return;
+  }
+
+  const d = new Date(dateStr + 'T12:00:00');
+  label.textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const recs = getRecordsForDate(dateStr);
+  if (recs.length === 0) {
+    listEl.innerHTML = '<p style="color:var(--text2)">No naps recorded</p>';
+    summaryEl.innerHTML = '';
+    return;
+  }
+
+  listEl.innerHTML = '<ul class="nap-list">' + recs.map((r, i) => {
+    const start = new Date(r.start);
+    const end = r.end ? new Date(r.end) : null;
+    const dur = end ? minsToHM((end - start) / 60000) : 'in progress';
+    return `<li class="nap-item">
+      <span class="nap-num">Nap ${i+1}</span>
+      <span class="nap-times">${formatTime(start)} – ${end ? formatTime(end) : '...'}</span>
+      <span class="nap-dur">${dur}</span>
+    </li>`;
+  }).join('') + '</ul>';
+
+  const totalSleep = recs.reduce((s, r) => {
+    if (r.end) return s + (new Date(r.end) - new Date(r.start)) / 60000;
+    return s;
+  }, 0);
+
+  // Wake windows
+  const s = getSettings();
+  const wakeMins = parseTime(s.morningWake);
+  const wws = [];
+  for (let i = 0; i < recs.length; i++) {
+    const napStart = dateToMins(new Date(recs[i].start));
+    const prevEnd = i === 0 ? wakeMins : (recs[i-1].end ? dateToMins(new Date(recs[i-1].end)) : null);
+    if (prevEnd !== null) wws.push(napStart - prevEnd);
+  }
+
+  const rating = data.ratings[dateStr];
+  const ratingEmoji = ['', '😫', '😟', '😐', '😊', '😁'];
+
+  summaryEl.innerHTML = `
+    <div class="stat"><span>Total naps</span><b>${recs.length}</b></div>
+    <div class="stat"><span>Total sleep</span><b>${minsToHM(totalSleep)}</b></div>
+    <div class="stat"><span>Wake windows</span><b>${wws.map(w => minsToHM(w)).join(', ') || '—'}</b></div>
+    ${rating ? `<div class="stat"><span>Day rating</span><b>${ratingEmoji[rating]}</b></div>` : ''}
+  `;
+
+  // Weekly trend
+  renderWeeklyTrend();
+}
+
+function renderWeeklyTrend() {
+  const trendEl = document.getElementById('weekly-trend');
+  const hist = getHistoricalWakeWindows(14);
+  if (hist.byDay.length < 3) {
+    trendEl.textContent = 'Need more data to show trends.';
+    return;
+  }
+
+  const recent7 = hist.byDay.slice(0, 7);
+  const avgNapCount = recent7.reduce((s, d) => s + d.napCount, 0) / recent7.length;
+  const avgTotalSleep = recent7.reduce((s, d) => s + d.napDurations.reduce((a,b) => a+b, 0), 0) / recent7.length;
+
+  // Compare to previous week
+  const prev7 = hist.byDay.slice(7, 14);
+  let trend = '';
+  if (prev7.length >= 3) {
+    const prevAvgCount = prev7.reduce((s, d) => s + d.napCount, 0) / prev7.length;
+    const diff = avgNapCount - prevAvgCount;
+    if (diff < -0.3) trend = '↓ Fewer naps than last week';
+    else if (diff > 0.3) trend = '↑ More naps than last week';
+    else trend = '→ Consistent nap count';
+  }
+
+  // Best day pattern from ratings
+  let bestPattern = '';
+  const ratedDays = hist.byDay.filter(d => data.ratings[d.date] >= 4);
+  if (ratedDays.length >= 2) {
+    const avgBestNaps = ratedDays.reduce((s,d) => s + d.napCount, 0) / ratedDays.length;
+    bestPattern = `\nBest days tend to have ${avgBestNaps.toFixed(1)} naps.`;
+  }
+
+  trendEl.innerHTML = `
+    <div>Avg naps/day: <b>${avgNapCount.toFixed(1)}</b></div>
+    <div>Avg nap time/day: <b>${minsToHM(avgTotalSleep)}</b></div>
+    ${trend ? `<div style="margin-top:4px">${trend}</div>` : ''}
+    ${bestPattern ? `<div style="margin-top:4px;color:var(--accent)">${bestPattern}</div>` : ''}
+  `;
+}
+
+// ---- TABS ----
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'history') renderHistory();
+}
+
+// ---- HELP MODAL ----
+function showHelp() { document.getElementById('help-modal').classList.remove('hidden'); }
+function closeHelp() { document.getElementById('help-modal').classList.add('hidden'); }
+
+// ---- DATA EXPORT/IMPORT ----
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `baby-sleep-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (imported.records && imported.settings) {
+        if (confirm(`Import ${imported.records.length} records? This will replace your current data.`)) {
+          data = imported;
+          saveData(data);
+          refreshAll();
+          initApp();
+        }
+      } else {
+        alert('Invalid data file.');
+      }
+    } catch(err) {
+      alert('Error reading file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearData() {
+  if (!confirm('Delete ALL sleep data? This cannot be undone.')) return;
+  if (!confirm('Are you really sure?')) return;
+  data = {
+    settings: data.settings, // keep settings
+    records: [],
+    ratings: {},
+  };
+  saveData(data);
+  refreshAll();
+}
+
+// ---- BOOT ----
+checkAuth();
+</script>
+</body>
+</html>
