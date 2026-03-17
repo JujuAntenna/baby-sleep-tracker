@@ -299,12 +299,14 @@ body {
 <div id="pin-screen" class="hidden">
   <div class="status-emoji">💤</div>
   <h1>Enter PIN</h1>
-  <p>Enter your 4-digit PIN to continue</p>
-  <div class="pin-input" id="pin-container">
-    <input type="tel" maxlength="1" data-idx="0" autocomplete="off">
-    <input type="tel" maxlength="1" data-idx="1" autocomplete="off">
-    <input type="tel" maxlength="1" data-idx="2" autocomplete="off">
-    <input type="tel" maxlength="1" data-idx="3" autocomplete="off">
+  <p>Enter your password to continue</p>
+  <div style="margin-bottom:24px">
+    <input type="password" id="pin-input" autocomplete="off" placeholder="Password"
+      style="width:200px;padding:14px 18px;font-size:1.1em;text-align:center;border:2px solid var(--accent2);border-radius:12px;background:var(--card);color:var(--text);outline:none"
+      onkeydown="if(event.key==='Enter')checkPin()">
+    <div style="margin-top:12px">
+      <button class="btn btn-primary" style="width:200px" onclick="checkPin()">Unlock</button>
+    </div>
   </div>
   <div class="pin-error" id="pin-error"></div>
 </div>
@@ -519,8 +521,8 @@ async function sha256(str) {
 // ---- DEFAULTS ----
 // Default token="demo123" PIN="1234"
 // Generate your own: echo -n "yourvalue" | shasum -a 256
-const DEFAULT_TOKEN_HASH = 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791'; // sha256("demo123")
-const DEFAULT_PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // sha256("1234")
+const DEFAULT_TOKEN_HASH = '56cbf63a7f2276b27cb53afce4b72dc59d5e9a4cda7e7bb873427f9ab1eba3b1'; // sha256 of your token
+const DEFAULT_PIN_HASH = '3d11180bd01e204522cbd905ddbc7ea7d358ed4e79f7ab615226d0fee4e8e661'; // sha256 of your PIN
 
 const STORAGE_KEY = 'babySleepData';
 
@@ -668,24 +670,15 @@ function showScreen(id) {
 }
 
 function initPinInput() {
-  const inputs = document.querySelectorAll('#pin-container input');
-  inputs[0].focus();
-  inputs.forEach((inp, i) => {
-    inp.value = '';
-    inp.addEventListener('input', () => {
-      if (inp.value.length === 1 && i < 3) inputs[i+1].focus();
-      if (i === 3 && inp.value.length === 1) checkPin();
-    });
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i-1].focus();
-    });
-  });
+  const inp = document.getElementById('pin-input');
+  inp.value = '';
+  inp.focus();
 }
 
 async function checkPin() {
-  const inputs = document.querySelectorAll('#pin-container input');
-  const pin = Array.from(inputs).map(i => i.value).join('');
-  if (pin.length !== 4) return;
+  const inp = document.getElementById('pin-input');
+  const pin = inp.value;
+  if (!pin) return;
 
   const pinHash = await sha256(pin);
   const storedHash = data.settings.pinHash || DEFAULT_PIN_HASH;
@@ -694,9 +687,9 @@ async function checkPin() {
     showScreen('app');
     initApp();
   } else {
-    document.getElementById('pin-error').textContent = 'Wrong PIN. Try again.';
-    inputs.forEach(i => { i.value = ''; });
-    inputs[0].focus();
+    document.getElementById('pin-error').textContent = 'Wrong password. Try again.';
+    inp.value = '';
+    inp.focus();
     setTimeout(() => { document.getElementById('pin-error').textContent = ''; }, 2000);
   }
 }
