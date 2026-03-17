@@ -1808,8 +1808,9 @@ function initApp() {
   refreshAll();
   startTimer();
 
-  // Sync from cloud on load
+  // Sync from cloud on load, then every 30 seconds
   syncFromCloud();
+  setInterval(syncFromCloud, 30000);
 
   // Register service worker
   if ('serviceWorker' in navigator) {
