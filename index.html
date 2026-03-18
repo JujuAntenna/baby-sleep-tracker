@@ -1413,7 +1413,12 @@ function uuid() {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function toLocalDateStr(date) {
+  return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
 }
 
 function parseTime(hhmm) {
@@ -1443,11 +1448,9 @@ function dateToMins(date) {
 }
 
 function getRecordsForDate(dateStr) {
-  const dayStart = new Date(dateStr + 'T00:00:00');
-  const dayEnd = new Date(dateStr + 'T23:59:59');
   return data.records.filter(r => {
     const s = new Date(r.start);
-    return s >= dayStart && s <= dayEnd;
+    return toLocalDateStr(s) === dateStr;
   }).sort((a,b) => new Date(a.start) - new Date(b.start));
 }
 
@@ -1529,7 +1532,7 @@ function getHistoricalWakeWindows(days) {
   for (let d = 0; d < days; d++) {
     const dt = new Date(now);
     dt.setDate(dt.getDate() - d);
-    const dateStr = dt.toISOString().slice(0,10);
+    const dateStr = toLocalDateStr(dt);
     const recs = getRecordsForDate(dateStr);
     if (recs.length === 0) continue;
 
@@ -1638,7 +1641,7 @@ function getClockAnchors(days) {
   for (let d = 0; d < days; d++) {
     const dt = new Date(now);
     dt.setDate(dt.getDate() - d);
-    const dateStr = dt.toISOString().slice(0,10);
+    const dateStr = toLocalDateStr(dt);
     const recs = getRecordsForDate(dateStr);
     recs.forEach((r, i) => {
       const pos = i + 1;
@@ -2117,8 +2120,14 @@ function toggleSleep() {
 }
 
 // ---- RECORD SLEEP / WAKE ----
+function toLocalISOString(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
+    + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')
+    + ':' + String(d.getSeconds()).padStart(2,'0');
+}
+
 function recordSleep() {
-  const rec = { id: uuid(), start: new Date().toISOString(), end: null };
+  const rec = { id: uuid(), start: toLocalISOString(new Date()), end: null };
   data.records.push(rec);
   saveData(data);
   showTimeAdjust(rec.id, 'start', new Date(rec.start));
@@ -2128,7 +2137,7 @@ function recordSleep() {
 function recordWake() {
   const rec = getCurrentSleepRecord();
   if (!rec) return;
-  rec.end = new Date().toISOString();
+  rec.end = toLocalISOString(new Date());
   saveData(data);
   showTimeAdjust(rec.id, 'end', new Date(rec.end));
   refreshAll();
@@ -2152,7 +2161,7 @@ function confirmAdjust() {
   if (!adjustingRecordId) return;
   const rec = data.records.find(r => r.id === adjustingRecordId);
   if (rec) {
-    rec[adjustingField] = adjustDate.toISOString();
+    rec[adjustingField] = toLocalISOString(adjustDate);
     saveData(data);
   }
   document.getElementById('time-adjust').classList.add('hidden');
@@ -2190,7 +2199,7 @@ function savePastSleep() {
   const end = new Date(`${dateVal}T${endVal}:00`);
   if (end <= start) { alert(t('wakeAfterSleep')); return; }
 
-  const rec = { id: uuid(), start: start.toISOString(), end: end.toISOString() };
+  const rec = { id: uuid(), start: toLocalISOString(start), end: toLocalISOString(end) };
   data.records.push(rec);
   data.records.sort((a,b) => new Date(a.start) - new Date(b.start));
   saveData(data);
