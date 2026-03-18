@@ -323,13 +323,19 @@
       "start": "2026-03-17T20:10:00",
       "end": "2026-03-18T07:45:00",
       "type": "night"
+    },
+    {
+      "id": "9dd57b7c-e9c5-4e6c-8822-4b2f04b52bd6",
+      "start": "2026-03-18T10:15:00",
+      "end": "2026-03-18T10:44:00",
+      "type": "nap"
     }
   ],
   "ratings": {},
   "settings": {
-    "morningWake": "07:30",
+    "morningWake": "06:30",
     "bedtime": "19:00",
     "babyAgeMonths": 7
   },
-  "lastUpdated": "2026-03-18T17:59:26.732Z"
+  "lastUpdated": "2026-03-18T18:09:52.132Z"
 }
