@@ -2392,7 +2392,11 @@ function savePastSleep() {
   if (!dateVal || !startVal || !endVal) { alert(t('fillAllFields')); return; }
 
   const start = new Date(`${dateVal}T${startVal}:00`);
-  const end = new Date(`${dateVal}T${endVal}:00`);
+  let end = new Date(`${dateVal}T${endVal}:00`);
+  // Night sleep crosses midnight — roll end to next day
+  if (end <= start && pastSleepType === 'night') {
+    end.setDate(end.getDate() + 1);
+  }
   if (end <= start) { alert(t('wakeAfterSleep')); return; }
 
   if (editingRecordId) {
