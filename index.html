@@ -546,7 +546,7 @@ body {
       <h2 id="set-schedule-title">⏰ Schedule</h2>
       <div class="setting-row">
         <label id="set-wake-label">Morning wake time</label>
-        <input type="time" id="set-wake" value="06:30" onchange="saveSetting('morningWake',this.value)">
+        <input type="time" id="set-wake" value="07:30" onchange="saveSetting('morningWake',this.value)">
       </div>
       <div class="setting-row">
         <label id="set-bed-label">Target bedtime</label>
@@ -1143,7 +1143,7 @@ function loadData() {
 function defaultData() {
   return {
     settings: {
-      morningWake: '06:30',
+      morningWake: '07:30',
       bedtime: '19:00',
       babyAgeMonths: 7,
       tokenHash: DEFAULT_TOKEN_HASH,
@@ -1425,9 +1425,10 @@ async function syncFromCloud() {
     data.ratings = { ...(cloudData.ratings || {}), ...data.ratings };
 
     if (cloudData.settings) {
-      if (!data.settings.morningWake) data.settings.morningWake = cloudData.settings.morningWake;
-      if (!data.settings.bedtime) data.settings.bedtime = cloudData.settings.bedtime;
-      if (!data.settings.babyAgeMonths) data.settings.babyAgeMonths = cloudData.settings.babyAgeMonths;
+      // Cloud settings take priority for schedule settings
+      if (cloudData.settings.morningWake) data.settings.morningWake = cloudData.settings.morningWake;
+      if (cloudData.settings.bedtime) data.settings.bedtime = cloudData.settings.bedtime;
+      if (cloudData.settings.babyAgeMonths) data.settings.babyAgeMonths = cloudData.settings.babyAgeMonths;
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
