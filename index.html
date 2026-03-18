@@ -1616,8 +1616,8 @@ function getTransitionInfo() {
   const pct = Math.round(twoDays / hist.byDay.length * 100);
 
   let note = null;
-  if (pct >= 60) note = `Trending toward 2 naps — ${pct}% of recent days were 2-nap days.`;
-  else if (pct <= 30) note = `Solidly on 3 naps — only ${pct}% of recent days were 2-nap days.`;
+  if (pct >= 60) note = t('trendingTwoNaps', { pct });
+  else if (pct <= 30) note = t('solidThreeNaps', { pct });
 
   return { twoNapPct: pct, note };
 }
@@ -1717,7 +1717,7 @@ function computePrediction() {
       time: predWake,
       timeMins: dateToMins(predWake),
       sleeping: true,
-      reasons: ['Currently sleeping. Expected wake based on average nap duration.'],
+      reasons: [t('expectedWake')],
       pressure: null,
       napDecision: null,
       morningPlan: null,
