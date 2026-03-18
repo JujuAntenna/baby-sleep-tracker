@@ -690,6 +690,7 @@ const i18n = {
     nightSleep: 'Night Sleep',
     totalNapTime: 'Total nap time',
     totalNightTime: 'Night sleep',
+    napsDoneForDay: '{n} naps done — time for bedtime',
     predBedtime: 'Est. bedtime',
     predNightDur: 'Est. night sleep',
     predMorningWake: 'Est. wake up',
@@ -834,6 +835,7 @@ const i18n = {
     nightSleep: '夜间睡眠',
     totalNapTime: '小睡总时长',
     totalNightTime: '夜间睡眠',
+    napsDoneForDay: '已完成{n}次小睡 — 准备就寝',
     predBedtime: '预计就寝',
     predNightDur: '预计夜间睡眠',
     predMorningWake: '预计起床',
@@ -1753,6 +1755,36 @@ function computePrediction() {
 
   const isMorning = completedNaps.length === 0 && !sleeping;
 
+  // ---- Determine if we should predict bedtime instead of another nap ----
+  // After enough naps, or late enough in the day, switch to bedtime mode
+  const avgLastWW2 = arrAvg(hist.lastWW2) || 210;
+  const avgLastWW3 = arrAvg(hist.lastWW3) || 165;
+
+  function shouldPredictBedtime() {
+    if (sleeping) return false;
+    if (completedNaps.length === 0) return false;
+
+    // After 3+ naps: almost always bedtime
+    if (completedNaps.length >= 3) {
+      // Only suggest another nap if there's tons of time AND big sleep deficit
+      const timeUntilBed = bounds.bedMins - lastWakeMins;
+      const neededFor4th = 120 + 20 + avgLastWW3; // min WW + short nap + last WW
+      if (timeUntilBed < neededFor4th) return true;
+      // Even if time allows, 4-nap days are rare — default to bedtime
+      return true;
+    }
+
+    // After 2 naps: bedtime if it's a clear 2-nap day situation
+    if (completedNaps.length === 2) {
+      const timeUntilBed = bounds.bedMins - nowMins;
+      // Not enough time for another nap cycle
+      const minNeeded = 90 + 20 + avgLastWW3; // WW + nap + last WW to bed
+      if (timeUntilBed < minNeeded) return true;
+    }
+
+    return false;
+  }
+
   // If currently sleeping, predict wake time
   if (sleeping) {
     const sleepRec = getCurrentSleepRecord();
@@ -1791,6 +1823,63 @@ function computePrediction() {
         pressureLevel: null, napDecision: null, morningPlan: null, transitionNote: null,
       };
     }
+  }
+
+  // ---- BEDTIME MODE: when naps are done for the day ----
+  if (shouldPredictBedtime()) {
+    const is2day = completedNaps.length <= 2;
+    const lwwHist = is2day ? hist.lastWW2 : hist.lastWW3;
+    const bedHist = is2day ? hist.bed2 : hist.bed3;
+    const avgLWW = arrAvg(lwwHist) || (is2day ? avgLastWW2 : avgLastWW3);
+    const avgBed = arrAvg(bedHist) || arrAvg([...hist.bed2, ...hist.bed3]) || bounds.bedMins;
+
+    // Primary: wake window from last nap end
+    let bedPred = lastWakeMins + avgLWW;
+    // Blend with historical bedtime clock if enough data
+    if (bedHist && bedHist.length >= 2) {
+      bedPred = 0.65 * bedPred + 0.35 * avgBed;
+    }
+    // Clamp: not before now+10, not absurdly late
+    bedPred = Math.max(bedPred, nowMins + 10);
+    bedPred = Math.min(bedPred, bounds.bedMins + 60);
+
+    // Night duration prediction
+    let nightDurPred = null;
+    let morningWakePred = null;
+    if (hist.totalDailySleep.length > 0 && hist.nightDurs.length > 0) {
+      const avgTotalSleep = arrAvg(hist.totalDailySleep);
+      const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
+      nightDurPred = Math.round(Math.max(avgTotalSleep - todayNapTotal, arrAvg(hist.nightDurs) * 0.9));
+      morningWakePred = (bedPred + nightDurPred) % 1440;
+    }
+
+    const reasons = [];
+    reasons.push(t('napsDoneForDay', { n: completedNaps.length }));
+    reasons.push(t('lastWW') + ': ' + minsToHM(avgLWW));
+
+    return {
+      type: 'bedtime',
+      time: minsToDate(bedPred),
+      timeMins: bedPred,
+      earliest: minsToDate(Math.max(bedPred - 20, nowMins + 5)),
+      earliestMins: Math.max(bedPred - 20, nowMins + 5),
+      latest: minsToDate(bedPred + 20),
+      latestMins: bedPred + 20,
+      sleeping: false,
+      isNight: true,
+      napPosition: null,
+      reasons,
+      pressureLevel: 'green',
+      pressureValue: null,
+      napDecision: null,
+      morningPlan: null,
+      transitionNote: null,
+      bedtimePred: minsToDate(bedPred),
+      bedtimeMins: bedPred,
+      nightDurPred: nightDurPred,
+      morningWakePred: morningWakePred ? minsToDate(morningWakePred) : null,
+      morningWakeMins: morningWakePred,
+    };
   }
 
   // ---- Determine 2-nap vs 3-nap blend ----
@@ -1850,7 +1939,6 @@ function computePrediction() {
 
   // ---- Schedule pressure ----
   const timeUntilBed = bounds.bedMins - nowMins;
-  const avgLastWW3 = arrAvg(hist.lastWW3) || 165;
   const remainingNapEstimate = Math.max(0, (completedNaps.length < 2) ? 1 : 0);
   const estRemainingTime = remainingNapEstimate * (baseWW + 50) + avgLastWW3;
   const pressure = timeUntilBed - estRemainingTime;
@@ -1862,12 +1950,10 @@ function computePrediction() {
   // ---- Nap decision (after 2+ naps) ----
   let napDecision = null;
   if (completedNaps.length >= 2) {
-    const avgLastWW2 = arrAvg(hist.lastWW2) || 210;
-    const avgLastWW3n = arrAvg(hist.lastWW3) || 165;
     const minNapDur = 20;
 
     // Can we fit another nap?
-    const neededForOneMore = baseWW + minNapDur + avgLastWW3n;
+    const neededForOneMore = baseWW + minNapDur + avgLastWW3;
     const canFit = timeUntilBed >= neededForOneMore;
 
     const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
@@ -1885,7 +1971,7 @@ function computePrediction() {
     const takeNap = score >= 3;
     const skipBedtime = lastWakeMins + avgLastWW2;
     const avgNapDur = arrAvg(hist.napDur[nextNapPos] || []) || 30;
-    const napBedtime = prediction + avgNapDur + avgLastWW3n;
+    const napBedtime = prediction + avgNapDur + avgLastWW3;
 
     if (canFit && score >= 2 && score <= 4) {
       napDecision = {
@@ -2302,7 +2388,16 @@ function renderDashboard() {
     document.getElementById('pred-reason').textContent = t('expectedWake');
     document.getElementById('pressure').className = 'pressure green';
     document.getElementById('pressure').textContent = t('sleepingStatus');
+  } else if (pred.type === 'bedtime') {
+    document.getElementById('pred-card-title').textContent = '🌙 ' + t('predBedtime');
+    document.getElementById('pred-time').textContent = '🌙 ' + formatTime(pred.time);
+    document.getElementById('pred-early').textContent = pred.earliest ? formatTime(pred.earliest) : '--';
+    document.getElementById('pred-late').textContent = pred.latest ? formatTime(pred.latest) : '--';
+    document.getElementById('pred-reason').textContent = pred.reasons.join('\n');
+    document.getElementById('pressure').className = 'pressure green';
+    document.getElementById('pressure').textContent = t('predBedtime');
   } else {
+    document.getElementById('pred-card-title').textContent = '📊 ' + t('nextNapPrediction');
     document.getElementById('pred-time').textContent = formatTime(pred.time);
     document.getElementById('pred-early').textContent = pred.earliest ? formatTime(pred.earliest) : '--';
     document.getElementById('pred-late').textContent = pred.latest ? formatTime(pred.latest) : '--';
@@ -2316,8 +2411,11 @@ function renderDashboard() {
 
   // Night predictions
   const nightPredEl = document.getElementById('night-pred');
-  if (pred.bedtimePred || pred.nightDurPred || pred.morningWakePred) {
+  if (pred.nightDurPred || pred.morningWakePred) {
     nightPredEl.style.display = 'block';
+    // Hide bedtime row when main card already shows it
+    const bedRow = document.getElementById('night-bed-time').parentElement;
+    bedRow.style.display = pred.type === 'bedtime' ? 'none' : 'flex';
     document.getElementById('night-bed-label').textContent = t('predBedtime');
     document.getElementById('night-dur-label').textContent = t('predNightDur');
     document.getElementById('night-wake-label').textContent = t('predMorningWake');
