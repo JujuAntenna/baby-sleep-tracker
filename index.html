@@ -469,6 +469,22 @@ body {
 
       <!-- Reasoning -->
       <div class="pred-reason" id="pred-reason"></div>
+
+      <!-- Bedtime & Night predictions -->
+      <div id="night-pred" style="margin-top:12px;display:none">
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.9em">
+          <span>🌙 <span id="night-bed-label">Bedtime</span></span>
+          <b id="night-bed-time">--:--</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.9em">
+          <span>😴 <span id="night-dur-label">Night sleep</span></span>
+          <b id="night-dur-value">--</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.9em">
+          <span>☀️ <span id="night-wake-label">Wake up</span></span>
+          <b id="night-wake-time">--:--</b>
+        </div>
+      </div>
     </div>
 
     <!-- Nap decision (when ambiguous) -->
@@ -674,6 +690,9 @@ const i18n = {
     nightSleep: 'Night Sleep',
     totalNapTime: 'Total nap time',
     totalNightTime: 'Night sleep',
+    predBedtime: 'Est. bedtime',
+    predNightDur: 'Est. night sleep',
+    predMorningWake: 'Est. wake up',
     inProgress: 'in progress',
     now: 'now',
     delete: 'Delete',
@@ -815,6 +834,9 @@ const i18n = {
     nightSleep: '夜间睡眠',
     totalNapTime: '小睡总时长',
     totalNightTime: '夜间睡眠',
+    predBedtime: '预计就寝',
+    predNightDur: '预计夜间睡眠',
+    predMorningWake: '预计起床',
     inProgress: '进行中',
     now: '现在',
     delete: '删除',
@@ -1568,372 +1590,358 @@ async function checkPin() {
 
 
 // ============================================
-// PREDICTION ENGINE
+// PREDICTION ENGINE (v2 — backtested)
 // ============================================
 
-// ---- Layer 1: Positional Wake Windows ----
-function getHistoricalWakeWindows(days) {
-  // Returns { byPosition: { 1: [mins,...], 2: [...], ... }, byDay: [...] }
-  const result = { byPosition: {}, byDay: [] };
-  const now = new Date();
-  for (let d = 0; d < days; d++) {
-    const dt = new Date(now);
-    dt.setDate(dt.getDate() - d);
-    const dateStr = toLocalDateStr(dt);
-    const recs = getNapsForDate(dateStr);
-    if (recs.length === 0) continue;
-
-    const s = getSettings();
-    // Use actual morning wake from night sleep record if available
-    const nightRecs = getNightForDate(dateStr);
-    let wakeMins = parseTime(s.morningWake);
-    if (nightRecs.length > 0 && nightRecs[0].end) {
-      wakeMins = dateToMins(new Date(nightRecs[0].end));
-    }
-    const morningWake = new Date(dateStr + 'T00:00:00');
-    morningWake.setMinutes(wakeMins);
-
-    let dayData = { date: dateStr, napCount: recs.length, wakeWindows: [], napDurations: [] };
-
-    for (let i = 0; i < recs.length; i++) {
-      const napStart = new Date(recs[i].start);
-      const napEnd = recs[i].end ? new Date(recs[i].end) : null;
-      const prevEnd = i === 0 ? morningWake : (recs[i-1].end ? new Date(recs[i-1].end) : null);
-
-      if (prevEnd) {
-        const ww = (napStart - prevEnd) / 60000; // minutes
-        if (ww > 0 && ww < 600) { // sanity check: < 10 hours
-          const pos = i + 1;
-          if (!result.byPosition[pos]) result.byPosition[pos] = [];
-          result.byPosition[pos].push({ mins: ww, daysAgo: d, napDur: null });
-          dayData.wakeWindows.push(ww);
-        }
-      }
-      if (napEnd) {
-        const dur = (napEnd - napStart) / 60000;
-        dayData.napDurations.push(dur);
-        // Attach nap duration to the wake window entry for Layer 2
-        if (result.byPosition[i+1]) {
-          const entries = result.byPosition[i+1];
-          if (entries.length > 0) entries[entries.length-1].napDur = dur;
-        }
+// ---- Micro-nap merging ----
+// Naps < 15 min followed by another nap within 30 min = one session
+function mergeMicroNaps(naps) {
+  const merged = [];
+  let i = 0;
+  while (i < naps.length) {
+    const n = naps[i];
+    const dur = (new Date(n.end || Date.now()) - new Date(n.start)) / 60000;
+    if (dur < 15 && n.end && i + 1 < naps.length) {
+      const next = naps[i + 1];
+      const gap = (new Date(next.start) - new Date(n.end)) / 60000;
+      if (gap < 30) {
+        merged.push({ ...n, end: next.end, type: next.type || 'nap', merged: true });
+        i += 2;
+        continue;
       }
     }
-    result.byDay.push(dayData);
+    merged.push(n);
+    i++;
   }
-  return result;
+  return merged;
 }
 
-function getWeightedAvgWakeWindow(entries) {
-  // Weight recent days more: weight = 1 / (1 + daysAgo * 0.3)
-  if (!entries || entries.length === 0) return null;
-  let sumW = 0, sumV = 0;
-  entries.forEach(e => {
-    const w = 1 / (1 + e.daysAgo * 0.3);
-    sumW += w;
-    sumV += e.mins * w;
-  });
-  return sumV / sumW;
-}
-
-function getStdDev(entries) {
-  if (!entries || entries.length < 2) return 20; // default 20 min
-  const avg = entries.reduce((s,e) => s + e.mins, 0) / entries.length;
-  const variance = entries.reduce((s,e) => s + (e.mins - avg) ** 2, 0) / entries.length;
-  return Math.sqrt(variance);
-}
-
-// ---- Layer 2: Nap Duration Adjustment ----
-function napDurationAdjustment(prevNapMins) {
-  if (prevNapMins === null || prevNapMins === undefined) return 1.0;
-  if (prevNapMins < 40) return 0.82; // short nap: reduce WW by ~18%
-  if (prevNapMins > 80) return 1.10; // long nap: extend WW by 10%
-  return 1.0;
-}
-
-// ---- Layer 3: Sleep Debt ----
-function getSleepDebt() {
-  const hist = getHistoricalWakeWindows(7);
-  if (hist.byDay.length < 2) return 0;
-
-  // Average daily total nap time from history
-  const pastDays = hist.byDay.filter(d => d.date !== todayStr());
-  if (pastDays.length === 0) return 0;
-  const avgDailyNap = pastDays.reduce((s, d) => s + d.napDurations.reduce((a,b) => a+b, 0), 0) / pastDays.length;
-
-  // Today's total nap time
-  const todayRecs = getTodayRecords();
-  const todayNap = todayRecs.reduce((s, r) => {
-    if (r.end) return s + (new Date(r.end) - new Date(r.start)) / 60000;
-    return s;
-  }, 0);
-
-  return avgDailyNap - todayNap; // positive = debt
-}
-
-// ---- Layer 4: Transition Detection ----
-function getTransitionInfo() {
-  const hist = getHistoricalWakeWindows(14);
-  if (hist.byDay.length < 5) return { twoNapPct: 50, note: null };
-
-  const twoDays = hist.byDay.filter(d => d.napCount <= 2).length;
-  const pct = Math.round(twoDays / hist.byDay.length * 100);
-
-  let note = null;
-  if (pct >= 60) note = t('trendingTwoNaps', { pct });
-  else if (pct <= 30) note = t('solidThreeNaps', { pct });
-
-  return { twoNapPct: pct, note };
-}
-
-// ---- Layer 5: Clock Anchoring ----
-function getClockAnchors(days) {
-  const result = {};
-  const now = new Date();
-  for (let d = 0; d < days; d++) {
-    const dt = new Date(now);
-    dt.setDate(dt.getDate() - d);
-    const dateStr = toLocalDateStr(dt);
-    const recs = getNapsForDate(dateStr);
-    recs.forEach((r, i) => {
-      const pos = i + 1;
-      if (!result[pos]) result[pos] = [];
-      const startMins = dateToMins(new Date(r.start));
-      result[pos].push(startMins);
-    });
-  }
-  // Average clock time per position
-  const anchors = {};
-  for (const pos in result) {
-    if (result[pos].length > 0) {
-      anchors[pos] = result[pos].reduce((a,b) => a+b, 0) / result[pos].length;
-    }
-  }
-  return anchors;
-}
-
-// ---- Layer 6: Schedule Framing ----
-function getScheduleBounds() {
-  const s = getSettings();
-  return {
-    wakeMins: parseTime(s.morningWake),
-    bedMins: parseTime(s.bedtime),
-    totalDayMins: parseTime(s.bedtime) - parseTime(s.morningWake),
+// ---- History collection ----
+function collectHistory(days) {
+  const hist = {
+    ww2nap: {}, ww3nap: {}, // wake windows by position, separated by day type
+    napDur: {},              // nap durations by position
+    lastWW2: [], lastWW3: [], // last WW before bedtime
+    bed2: [], bed3: [],       // bedtimes by day type
+    nightDurs: [],
+    totalDailySleep: [],
+    napTotals: [],
+    morningWakes: [],
   };
+  const now = new Date();
+  for (let d = 1; d <= days; d++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() - d);
+    const dateStr = toLocalDateStr(dt);
+    const allRecs = getRecordsForDate(dateStr);
+    const naps = allRecs.filter(r => r.type !== 'night');
+    const nights = allRecs.filter(r => r.type === 'night');
+
+    // Find morning wake (from night record ending this day)
+    let morningWakeMins = null;
+    // Check all night records for one that ends on this date
+    data.records.filter(r => r.type === 'night' && r.end).forEach(r => {
+      if (toLocalDateStr(new Date(r.end)) === dateStr) {
+        morningWakeMins = dateToMins(new Date(r.end));
+      }
+    });
+    if (morningWakeMins !== null) hist.morningWakes.push(morningWakeMins);
+
+    const mergedNaps = mergeMicroNaps(naps);
+    if (mergedNaps.length === 0) continue;
+
+    const is2nap = mergedNaps.length <= 2;
+    const wwSet = is2nap ? hist.ww2nap : hist.ww3nap;
+
+    let lastEnd = morningWakeMins || parseTime(getSettings().morningWake);
+    mergedNaps.forEach((n, i) => {
+      const ns = dateToMins(new Date(n.start));
+      const ne = n.end ? dateToMins(new Date(n.end)) : ns + 50;
+      const pos = i + 1;
+      const ww = ns - lastEnd;
+      if (ww > 0 && ww < 400) {
+        if (!wwSet[pos]) wwSet[pos] = [];
+        wwSet[pos].push(ww);
+      }
+      if (!hist.napDur[pos]) hist.napDur[pos] = [];
+      if (n.end) hist.napDur[pos].push(ne - ns);
+      lastEnd = ne;
+    });
+
+    // Bedtime and last WW
+    if (nights.length > 0) {
+      const nightStart = nights.find(n => dateToMins(new Date(n.start)) > 17 * 60);
+      if (nightStart) {
+        const bed = dateToMins(new Date(nightStart.start));
+        const lww = bed - lastEnd;
+        if (lww > 0) {
+          if (is2nap) { hist.lastWW2.push(lww); hist.bed2.push(bed); }
+          else { hist.lastWW3.push(lww); hist.bed3.push(bed); }
+        }
+        if (nightStart.end) {
+          const nightDur = (new Date(nightStart.end) - new Date(nightStart.start)) / 60000;
+          hist.nightDurs.push(nightDur);
+          const napTotal = mergedNaps.reduce((s, n) => {
+            if (!n.end) return s;
+            return s + (new Date(n.end) - new Date(n.start)) / 60000;
+          }, 0);
+          hist.napTotals.push(napTotal);
+          hist.totalDailySleep.push(napTotal + nightDur);
+        }
+      }
+    }
+  }
+  return hist;
 }
 
-// ---- Cold Start Blending ----
-function getDataWeight() {
-  const hist = getHistoricalWakeWindows(14);
-  const days = hist.byDay.length;
-  if (days <= 1) return 0.2;
-  if (days <= 3) return 0.2 + (days - 1) * 0.15; // 0.2 → 0.5
-  if (days <= 7) return 0.5 + (days - 3) * 0.075; // 0.5 → 0.8
-  return Math.min(0.95, 0.8 + (days - 7) * 0.02);
+function arrAvg(arr) { return arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
+function arrStdev(arr) {
+  if (arr.length < 2) return 30;
+  const avg = arrAvg(arr);
+  return Math.sqrt(arr.reduce((s, v) => s + (v - avg) ** 2, 0) / arr.length);
 }
 
-// ---- MAIN PREDICTION FUNCTION ----
+// ---- Main Prediction ----
 function computePrediction() {
   const s = getSettings();
   const bounds = getScheduleBounds();
   const todayRecs = getTodayRecords();
   const todayNaps = todayRecs.filter(r => r.type !== 'night');
   const todayNight = todayRecs.filter(r => r.type === 'night');
-  const hist = getHistoricalWakeWindows(7);
+  const hist = collectHistory(14);
   const defaults = getAgeDefaults(s.babyAgeMonths);
-  const transition = getTransitionInfo();
-  const clockAnchors = getClockAnchors(14);
-  const dataWeight = getDataWeight();
-  const sleepDebt = getSleepDebt();
   const sleeping = isCurrentlySleeping();
-
   const now = new Date();
   const nowMins = dateToMins(now);
 
-  // Determine what nap we're predicting (exclude night sleep)
-  const completedNaps = todayNaps.filter(r => r.end !== null);
+  const mergedNaps = mergeMicroNaps(todayNaps.filter(r => r.end !== null));
+  const completedNaps = mergedNaps;
   const nextNapPos = completedNaps.length + 1;
-  const isMorning = completedNaps.length === 0 && !sleeping;
 
-  // What time did baby last wake?
+  // Morning wake from night sleep
+  let morningWakeMins = bounds.wakeMins;
+  data.records.filter(r => r.type === 'night' && r.end).forEach(r => {
+    if (toLocalDateStr(new Date(r.end)) === todayStr()) {
+      morningWakeMins = dateToMins(new Date(r.end));
+    }
+  });
+
+  // Last wake time
   let lastWakeMins;
   if (completedNaps.length > 0) {
     lastWakeMins = dateToMins(new Date(completedNaps[completedNaps.length - 1].end));
-  } else if (todayNight.length > 0 && todayNight[0].end) {
-    // Use actual morning wake time from night sleep
-    lastWakeMins = dateToMins(new Date(todayNight[0].end));
   } else {
-    lastWakeMins = bounds.wakeMins;
+    lastWakeMins = morningWakeMins;
   }
 
-  // Previous nap duration (for Layer 2)
+  // Previous nap duration
   let prevNapDur = null;
   if (completedNaps.length > 0) {
     const last = completedNaps[completedNaps.length - 1];
     prevNapDur = (new Date(last.end) - new Date(last.start)) / 60000;
   }
 
-  // If currently sleeping, predict wake time instead
+  const isMorning = completedNaps.length === 0 && !sleeping;
+
+  // If currently sleeping, predict wake time
   if (sleeping) {
     const sleepRec = getCurrentSleepRecord();
+    const isNightSleep = sleepRec.type === 'night';
     const sleepStart = new Date(sleepRec.start);
-    // Average nap duration for this position
-    const pos = completedNaps.length + 1;
-    const avgDur = getAvgNapDuration(pos, hist) || 60; // default 60 min
-    const predWake = new Date(sleepStart.getTime() + avgDur * 60000);
-    return {
-      type: 'wake',
-      time: predWake,
-      timeMins: dateToMins(predWake),
-      sleeping: true,
-      reasons: [t('expectedWake')],
-      pressure: null,
-      napDecision: null,
-      morningPlan: null,
-    };
-  }
 
-  // ---- Interval-based prediction ----
-  // Blend 2-nap and 3-nap defaults based on transition trend
-  const blend3 = (100 - transition.twoNapPct) / 100;
-  const blend2 = transition.twoNapPct / 100;
-
-  let defaultWW;
-  if (nextNapPos <= 3 && defaults.nap3[nextNapPos - 1] !== undefined) {
-    const ww3 = defaults.nap3[nextNapPos - 1] * 60; // to minutes
-    const ww2 = (defaults.nap2[nextNapPos - 1] || defaults.nap2[defaults.nap2.length - 1]) * 60;
-    defaultWW = blend2 * ww2 + blend3 * ww3;
-  } else {
-    defaultWW = (defaults.nap2[defaults.nap2.length - 1] || 3.5) * 60;
-  }
-
-  // Historical WW for this position
-  const histEntries = hist.byPosition[nextNapPos];
-  const histAvg = getWeightedAvgWakeWindow(histEntries);
-  const stddev = getStdDev(histEntries);
-
-  // Blend historical and defaults
-  let baseWW;
-  if (histAvg !== null) {
-    baseWW = dataWeight * histAvg + (1 - dataWeight) * defaultWW;
-  } else {
-    baseWW = defaultWW;
-  }
-
-  // Layer 2: Nap duration adjustment
-  const napAdj = napDurationAdjustment(prevNapDur);
-  baseWW *= napAdj;
-
-  // Layer 3: Sleep debt
-  let debtAdj = 0;
-  if (sleepDebt > 30) debtAdj = -15;
-  else if (sleepDebt > 15) debtAdj = -8;
-
-  let intervalPred = lastWakeMins + baseWW + debtAdj;
-
-  // ---- Layer 5: Clock anchoring ----
-  let clockPred = intervalPred;
-  if (clockAnchors[nextNapPos]) {
-    const clockDays = Object.values(clockAnchors).flat ? hist.byDay.length : 7;
-    const clockWeight = Math.min(0.5, 0.3 + clockDays * 0.015);
-    clockPred = (1 - clockWeight) * intervalPred + clockWeight * clockAnchors[nextNapPos];
-  }
-
-  // ---- Layer 6: Bidirectional — constrain against bedtime ----
-  // Last WW before bed should be at least min_last_ww
-  const minLastWW = (defaults.nap2[defaults.nap2.length - 1] || 3) * 60 * 0.8; // 80% of default last WW
-  const latestNapEnd = bounds.bedMins - minLastWW;
-  // Estimate nap duration
-  const avgNapDur = getAvgNapDuration(nextNapPos, hist) || 50;
-  const latestNapStart = latestNapEnd - avgNapDur;
-
-  let prediction = Math.min(clockPred, latestNapStart);
-  prediction = Math.max(prediction, nowMins + 5); // at least 5 min from now
-
-  // ---- Confidence range ----
-  const earliest = Math.max(prediction - Math.min(stddev, 20), nowMins + 3);
-  const latest = Math.min(prediction + Math.min(stddev, 25), latestNapStart + 10);
-
-  // ---- Layer 7: Dynamic Nap Count Decision ----
-  let napDecision = null;
-  const timeUntilBed = bounds.bedMins - nowMins;
-  const nextWW = baseWW;
-  const minNapDur = 20;
-  const neededForOneMore = nextWW + minNapDur + minLastWW;
-
-  if (completedNaps.length >= 2) {
-    const canFit = timeUntilBed >= neededForOneMore;
-    const totalNapToday = completedNaps.reduce((s, r) =>
-      s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
-
-    const avgDailyNap = getAvgDailyNapTime(hist);
-    const napDeficit = avgDailyNap - totalNapToday;
-    const lastNapWasShort = prevNapDur !== null && prevNapDur < 40;
-
-    // Score: higher = more reason to take another nap
-    let score = 0;
-    if (canFit) score += 2;
-    if (napDeficit > 30) score += 2;
-    if (lastNapWasShort) score += 1;
-    if (transition.twoNapPct < 40) score += 1; // still mostly 3-nap
-    if (timeUntilBed < neededForOneMore + 30) score -= 1; // tight squeeze
-
-    const takeNap = score >= 3;
-    const skipBedtime = lastWakeMins + minLastWW;
-    const napTime = prediction;
-    const cappedNapEnd = Math.min(napTime + avgNapDur, latestNapEnd);
-    const napBedtime = cappedNapEnd + minLastWW;
-
-    if (canFit && score >= 2 && score <= 4) {
-      // Ambiguous — show both options
-      napDecision = {
-        ambiguous: true,
-        recommended: takeNap ? 'take' : 'skip',
-        takeOption: {
-          napTime: napTime,
-          napEnd: cappedNapEnd,
-          bedtime: Math.min(napBedtime, bounds.bedMins + 30),
-          reason: buildNapReason(true, napDeficit, lastNapWasShort, canFit, transition),
-        },
-        skipOption: {
-          bedtime: Math.min(skipBedtime, bounds.bedMins + 15),
-          lastWW: skipBedtime - lastWakeMins,
-          reason: buildNapReason(false, napDeficit, lastNapWasShort, canFit, transition),
-        },
+    if (isNightSleep) {
+      // Night sleep: predict morning wake
+      const avgNightDur = arrAvg(hist.nightDurs) || 690;
+      const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
+      const avgTotalSleep = arrAvg(hist.totalDailySleep) || 840;
+      const nightPred = Math.max(avgTotalSleep - todayNapTotal, avgNightDur * 0.9);
+      const predWake = new Date(sleepStart.getTime() + nightPred * 60000);
+      return {
+        type: 'morning-wake',
+        time: predWake,
+        timeMins: dateToMins(predWake),
+        sleeping: true,
+        isNight: true,
+        nightDurPred: Math.round(nightPred),
+        reasons: [t('expectedWake') + ` (~${minsToHM(nightPred)})`],
+        pressureLevel: null, napDecision: null, morningPlan: null, transitionNote: null,
       };
-    } else if (!canFit) {
-      napDecision = { ambiguous: false, action: 'skip', bedtime: Math.min(skipBedtime, bounds.bedMins + 20) };
+    } else {
+      // Nap: predict wake
+      const pos = completedNaps.length + 1;
+      const avgDur = arrAvg(hist.napDur[pos] || []) || 50;
+      const predWake = new Date(sleepStart.getTime() + avgDur * 60000);
+      return {
+        type: 'wake',
+        time: predWake,
+        timeMins: dateToMins(predWake),
+        sleeping: true,
+        isNight: false,
+        reasons: [t('expectedWake')],
+        pressureLevel: null, napDecision: null, morningPlan: null, transitionNote: null,
+      };
     }
   }
 
-  // ---- Layer 8: Schedule Pressure ----
-  const remainingNaps = estimateRemainingNaps(completedNaps.length, bounds, nowMins, defaults, transition);
-  const estRemainingSleep = remainingNaps * (avgNapDur || 50);
-  const estRemainingWake = remainingNaps * baseWW + minLastWW;
-  const pressure = timeUntilBed - (estRemainingSleep + estRemainingWake);
+  // ---- Determine 2-nap vs 3-nap blend ----
+  const total2entries = Object.values(hist.ww2nap).flat().length;
+  const total3entries = Object.values(hist.ww3nap).flat().length;
+  const pct2 = total2entries / Math.max(1, total2entries + total3entries);
 
+  // ---- Wake window prediction ----
+  const ww2 = arrAvg(hist.ww2nap[nextNapPos] || []);
+  const ww3 = arrAvg(hist.ww3nap[nextNapPos] || []);
+  let baseWW;
+  if (ww2 !== null && ww3 !== null) {
+    baseWW = pct2 * ww2 + (1 - pct2) * ww3;
+  } else if (ww2 !== null) {
+    baseWW = ww2;
+  } else if (ww3 !== null) {
+    baseWW = ww3;
+  } else {
+    // Age-based defaults
+    const def = defaults.nap3[nextNapPos - 1] || defaults.nap2[nextNapPos - 1] || 2.5;
+    baseWW = def * 60;
+  }
+
+  // Gradual nap duration adjustment
+  let napAdj = 1.0;
+  if (prevNapDur !== null) {
+    const avgDur = arrAvg(hist.napDur[completedNaps.length] || []) || 50;
+    const ratio = prevNapDur / avgDur;
+    napAdj = 1.0 + (ratio - 1.0) * 0.25;
+    napAdj = Math.max(0.82, Math.min(1.12, napAdj));
+  }
+
+  // Sleep debt adjustment
+  let debtAdj = 0;
+  if (hist.napTotals.length > 0) {
+    const avgNapTotal = arrAvg(hist.napTotals);
+    const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
+    const debt = avgNapTotal - todayNapTotal;
+    if (debt > 30) debtAdj = -12;
+    else if (debt > 15) debtAdj = -6;
+  }
+
+  let prediction = lastWakeMins + baseWW * napAdj + debtAdj;
+  prediction = Math.max(prediction, nowMins + 5);
+
+  // Confidence range
+  const allWWs = [...(hist.ww2nap[nextNapPos] || []), ...(hist.ww3nap[nextNapPos] || [])];
+  const stddev = arrStdev(allWWs);
+  const earliest = Math.max(prediction - Math.min(stddev * 0.8, 25), nowMins + 3);
+  const latest = prediction + Math.min(stddev * 0.8, 25);
+
+  // ---- Transition detection ----
+  let transitionNote = null;
+  const twoNapPct = Math.round(pct2 * 100);
+  if (twoNapPct >= 60) transitionNote = t('trendingTwoNaps', { pct: twoNapPct });
+  else if (twoNapPct <= 25 && total2entries + total3entries >= 5) transitionNote = t('solidThreeNaps', { pct: twoNapPct });
+
+  // ---- Schedule pressure ----
+  const timeUntilBed = bounds.bedMins - nowMins;
+  const avgLastWW3 = arrAvg(hist.lastWW3) || 165;
+  const remainingNapEstimate = Math.max(0, (completedNaps.length < 2) ? 1 : 0);
+  const estRemainingTime = remainingNapEstimate * (baseWW + 50) + avgLastWW3;
+  const pressure = timeUntilBed - estRemainingTime;
   let pressureLevel;
   if (pressure > 30) pressureLevel = 'green';
   else if (pressure > -15) pressureLevel = 'yellow';
   else pressureLevel = 'red';
 
+  // ---- Nap decision (after 2+ naps) ----
+  let napDecision = null;
+  if (completedNaps.length >= 2) {
+    const avgLastWW2 = arrAvg(hist.lastWW2) || 210;
+    const avgLastWW3n = arrAvg(hist.lastWW3) || 165;
+    const minNapDur = 20;
+
+    // Can we fit another nap?
+    const neededForOneMore = baseWW + minNapDur + avgLastWW3n;
+    const canFit = timeUntilBed >= neededForOneMore;
+
+    const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
+    const avgDailyNap = arrAvg(hist.napTotals) || 140;
+    const deficit = avgDailyNap - todayNapTotal;
+    const lastNapShort = prevNapDur !== null && prevNapDur < 35;
+
+    let score = 0;
+    if (canFit) score += 2;
+    if (deficit > 25) score += 2;
+    if (lastNapShort) score += 1;
+    if (pct2 < 0.4) score += 1;
+    if (timeUntilBed < neededForOneMore + 30) score -= 1;
+
+    const takeNap = score >= 3;
+    const skipBedtime = lastWakeMins + avgLastWW2;
+    const avgNapDur = arrAvg(hist.napDur[nextNapPos] || []) || 30;
+    const napBedtime = prediction + avgNapDur + avgLastWW3n;
+
+    if (canFit && score >= 2 && score <= 4) {
+      napDecision = {
+        ambiguous: true,
+        recommended: takeNap ? 'take' : 'skip',
+        takeOption: {
+          napTime: prediction,
+          napEnd: prediction + avgNapDur,
+          bedtime: Math.min(napBedtime, bounds.bedMins + 30),
+          reason: buildNapReason(true, deficit, lastNapShort, canFit, { twoNapPct }),
+        },
+        skipOption: {
+          bedtime: Math.min(skipBedtime, bounds.bedMins + 20),
+          lastWW: skipBedtime - lastWakeMins,
+          reason: buildNapReason(false, deficit, lastNapShort, canFit, { twoNapPct }),
+        },
+      };
+    } else if (!canFit) {
+      napDecision = { ambiguous: false, action: 'skip', bedtime: Math.min(skipBedtime, bounds.bedMins + 30) };
+    }
+  }
+
+  // ---- Bedtime prediction ----
+  let bedtimePred = null;
+  if (completedNaps.length >= 2) {
+    const is2day = napDecision && (napDecision.action === 'skip' || napDecision.recommended === 'skip');
+    const lwwHist = is2day ? hist.lastWW2 : hist.lastWW3;
+    const bedHist = is2day ? hist.bed2 : hist.bed3;
+    const avgLWW = arrAvg(lwwHist);
+    const avgBed = arrAvg(bedHist);
+
+    if (avgLWW !== null) {
+      bedtimePred = lastWakeMins + avgLWW;
+      if (avgBed && bedHist.length >= 2) {
+        bedtimePred = 0.65 * bedtimePred + 0.35 * avgBed;
+      }
+    }
+  }
+
+  // ---- Night sleep prediction ----
+  let nightPred = null;
+  let morningWakePred = null;
+  if (hist.totalDailySleep.length > 0 && hist.nightDurs.length > 0) {
+    const avgTotalSleep = arrAvg(hist.totalDailySleep);
+    const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
+    nightPred = Math.max(avgTotalSleep - todayNapTotal, arrAvg(hist.nightDurs) * 0.9);
+
+    if (bedtimePred) {
+      morningWakePred = (bedtimePred + nightPred) % 1440;
+    }
+  }
+
   // ---- Build reasoning ----
   const reasons = [];
-  reasons.push(`Wake window #${nextNapPos}: ${Math.round(baseWW)} min`);
-  if (napAdj !== 1.0) {
-    reasons.push(prevNapDur < 40 ?
-      `Shortened for short nap (${Math.round(prevNapDur)}min)` :
-      `Extended for long nap (${Math.round(prevNapDur)}min)`);
-  }
-  if (debtAdj) reasons.push(`Sleep debt adjustment: ${debtAdj}min`);
-  if (histAvg) reasons.push(`Based on ${histEntries.length} data points (${Math.round(dataWeight*100)}% from your data)`);
-  else reasons.push(`Using age defaults for ${s.babyAgeMonths}-month-old`);
-  if (transition.note) reasons.push(transition.note);
+  reasons.push(t('wakeWindow', { n: nextNapPos, mins: Math.round(baseWW * napAdj) }));
+  if (napAdj < 0.95) reasons.push(t('shortenedShortNap', { dur: Math.round(prevNapDur) }));
+  else if (napAdj > 1.05) reasons.push(t('extendedLongNap', { dur: Math.round(prevNapDur) }));
+  if (debtAdj) reasons.push(t('sleepDebtAdj', { adj: debtAdj }));
+  if (allWWs.length > 0) reasons.push(t('basedOnDataPoints', { n: allWWs.length, pct: Math.round(allWWs.length / Math.max(1, allWWs.length + 1) * 100) }));
+  else reasons.push(t('usingDefaults', { age: s.babyAgeMonths }));
+  if (transitionNote) reasons.push(transitionNote);
 
-  // ---- Morning Plan (Layer 10) ----
+  // ---- Morning plan ----
   let morningPlan = null;
   if (isMorning || completedNaps.length === 0) {
-    morningPlan = buildMorningPlan(bounds, defaults, transition, hist);
+    morningPlan = buildMorningPlan(bounds, defaults, { twoNapPct }, hist, morningWakeMins);
   }
 
   return {
@@ -1945,81 +1953,65 @@ function computePrediction() {
     latest: minsToDate(latest),
     latestMins: latest,
     sleeping: false,
+    isNight: false,
     napPosition: nextNapPos,
     reasons,
     pressureLevel,
     pressureValue: pressure,
     napDecision,
     morningPlan,
-    transitionNote: transition.note,
+    transitionNote,
+    bedtimePred: bedtimePred ? minsToDate(bedtimePred) : null,
+    bedtimeMins: bedtimePred,
+    nightDurPred: nightPred ? Math.round(nightPred) : null,
+    morningWakePred: morningWakePred ? minsToDate(morningWakePred) : null,
+    morningWakeMins: morningWakePred,
   };
-}
-
-function getAvgNapDuration(position, hist) {
-  const durations = [];
-  hist.byDay.forEach(d => {
-    if (d.napDurations[position - 1]) durations.push(d.napDurations[position - 1]);
-  });
-  if (durations.length === 0) return null;
-  return durations.reduce((a,b) => a+b, 0) / durations.length;
-}
-
-function getAvgDailyNapTime(hist) {
-  const pastDays = hist.byDay.filter(d => d.date !== todayStr());
-  if (pastDays.length === 0) return 150; // default 2.5h
-  return pastDays.reduce((s, d) => s + d.napDurations.reduce((a,b) => a+b, 0), 0) / pastDays.length;
-}
-
-function estimateRemainingNaps(completed, bounds, nowMins, defaults, transition) {
-  const remaining = bounds.bedMins - nowMins;
-  const avgWW = ((defaults.nap2[1] || 3) * 60 + (defaults.nap3[1] || 2.5) * 60) / 2;
-  const avgNap = 50;
-  const canFit = Math.floor(remaining / (avgWW + avgNap));
-  if (completed >= 2 && transition.twoNapPct > 60) return Math.min(canFit, 0);
-  return Math.max(0, Math.min(canFit, 3 - completed));
 }
 
 function buildNapReason(isForTaking, deficit, shortNap, canFit, transition) {
   const parts = [];
   if (isForTaking) {
-    if (deficit > 30) parts.push(`Sleep deficit of ${Math.round(deficit)}min`);
-    if (shortNap) parts.push('Previous nap was short');
-    if (canFit) parts.push('Time available before bedtime');
+    if (deficit > 25) parts.push(t('sleepDeficit', { mins: Math.round(deficit) }));
+    if (shortNap) parts.push(t('prevNapShort'));
+    if (canFit) parts.push(t('timeAvailable'));
   } else {
-    if (deficit <= 10) parts.push('Good total sleep today');
-    if (!shortNap) parts.push('Last nap was solid');
-    if (transition.twoNapPct > 50) parts.push(`Trending toward 2 naps (${transition.twoNapPct}%)`);
+    if (deficit <= 10) parts.push(t('goodSleepToday'));
+    if (!shortNap) parts.push(t('lastNapSolid'));
+    if (transition.twoNapPct > 50) parts.push(t('trendingTwoNapsPct', { pct: transition.twoNapPct }));
   }
   return parts.join('. ') + '.';
 }
 
-function buildMorningPlan(bounds, defaults, transition, hist) {
-  const wake = bounds.wakeMins;
-  const bed = bounds.bedMins;
+function buildMorningPlan(bounds, defaults, transition, hist, actualWake) {
+  const wake = actualWake || bounds.wakeMins;
 
-  // 2-nap plan
-  const plan2 = [];
-  let t = wake;
-  for (let i = 0; i < 2; i++) {
-    const ww = defaults.nap2[i] * 60;
-    const napStart = t + ww;
-    const napDur = i === 0 ? 75 : 90; // defaults
-    plan2.push({ start: napStart, end: napStart + napDur, label: `Nap ${i+1}` });
-    t = napStart + napDur;
-  }
-  plan2.push({ start: bed, end: bed, label: 'Bedtime' });
+  // 2-nap plan using historical data or defaults
+  const ww2_1 = arrAvg(hist.ww2nap[1] || []) || defaults.nap2[0] * 60;
+  const ww2_2 = arrAvg(hist.ww2nap[2] || []) || defaults.nap2[1] * 60;
+  const dur2_1 = arrAvg(hist.napDur[1] || []) || 50;
+  const dur2_2 = arrAvg(hist.napDur[2] || []) || 80;
+  const plan2 = [
+    { start: wake + ww2_1, end: wake + ww2_1 + dur2_1, label: `${t('nap')} 1` },
+    { start: wake + ww2_1 + dur2_1 + ww2_2, end: wake + ww2_1 + dur2_1 + ww2_2 + dur2_2, label: `${t('nap')} 2` },
+    { start: arrAvg(hist.bed2) || bounds.bedMins, end: 0, label: t('bedtime') },
+  ];
 
   // 3-nap plan
+  const ww3_1 = arrAvg(hist.ww3nap[1] || []) || defaults.nap3[0] * 60;
+  const ww3_2 = arrAvg(hist.ww3nap[2] || []) || defaults.nap3[1] * 60;
+  const ww3_3 = arrAvg(hist.ww3nap[3] || []) || defaults.nap3[2] * 60;
+  const dur3_1 = arrAvg(hist.napDur[1] || []) || 40;
+  const dur3_2 = arrAvg(hist.napDur[2] || []) || 70;
+  const dur3_3 = arrAvg(hist.napDur[3] || []) || 30;
+  let t3 = wake;
   const plan3 = [];
-  t = wake;
-  for (let i = 0; i < 3; i++) {
-    const ww = defaults.nap3[i] * 60;
-    const napStart = t + ww;
-    const napDur = i < 2 ? 65 : 30; // last nap is short
-    plan3.push({ start: napStart, end: napStart + napDur, label: `Nap ${i+1}` });
-    t = napStart + napDur;
-  }
-  plan3.push({ start: bed, end: bed, label: 'Bedtime' });
+  [ww3_1, ww3_2, ww3_3].forEach((ww, i) => {
+    const dur = [dur3_1, dur3_2, dur3_3][i];
+    plan3.push({ start: t3 + ww, end: t3 + ww + dur, label: `${t('nap')} ${i + 1}` });
+    t3 = t3 + ww + dur;
+  });
+  plan3.push({ start: arrAvg(hist.bed3) || bounds.bedMins, end: 0, label: t('bedtime') });
 
   return { plan2, plan3, twoNapPct: transition.twoNapPct };
 }
@@ -2027,7 +2019,7 @@ function buildMorningPlan(bounds, defaults, transition, hist) {
 function minsToDate(mins) {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  d.setMinutes(Math.round(mins));
+  d.setMinutes(Math.round(((mins % 1440) + 1440) % 1440));
   return d;
 }
 
@@ -2310,6 +2302,20 @@ function renderDashboard() {
     if (pred.pressureLevel === 'green') { pEl.className = 'pressure green'; pEl.textContent = t('onTrack'); }
     else if (pred.pressureLevel === 'yellow') { pEl.className = 'pressure yellow'; pEl.textContent = t('gettingTight'); }
     else { pEl.className = 'pressure red'; pEl.textContent = t('offSchedule'); }
+  }
+
+  // Night predictions
+  const nightPredEl = document.getElementById('night-pred');
+  if (pred.bedtimePred || pred.nightDurPred || pred.morningWakePred) {
+    nightPredEl.style.display = 'block';
+    document.getElementById('night-bed-label').textContent = t('predBedtime');
+    document.getElementById('night-dur-label').textContent = t('predNightDur');
+    document.getElementById('night-wake-label').textContent = t('predMorningWake');
+    document.getElementById('night-bed-time').textContent = pred.bedtimePred ? formatTime(pred.bedtimePred) : '--';
+    document.getElementById('night-dur-value').textContent = pred.nightDurPred ? minsToHM(pred.nightDurPred) : '--';
+    document.getElementById('night-wake-time').textContent = pred.morningWakePred ? formatTime(pred.morningWakePred) : '--';
+  } else {
+    nightPredEl.style.display = 'none';
   }
 
   // Timeline
