@@ -1490,6 +1490,16 @@ function dateToMins(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
+function getScheduleBounds() {
+  const s = getSettings();
+  return {
+    wakeMins: parseTime(s.morningWake),
+    bedMins: parseTime(s.bedtime),
+    wakeTime: s.morningWake,
+    bedTime: s.bedtime,
+  };
+}
+
 function classifyRecord(r) {
   // Auto-classify records without a type field
   if (r.type) return r;
@@ -2593,17 +2603,31 @@ function renderHistDetail() {
 
 function renderWeeklyTrend() {
   const trendEl = document.getElementById('weekly-trend');
-  const hist = getHistoricalWakeWindows(14);
-  if (hist.byDay.length < 3) {
+
+  // Build daily summary for last 14 days
+  const byDay = [];
+  const now = new Date();
+  for (let d = 0; d < 14; d++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() - d);
+    const dateStr = toLocalDateStr(dt);
+    const naps = getNapsForDate(dateStr);
+    const mergedNaps = mergeMicroNaps(naps);
+    if (mergedNaps.length === 0) continue;
+    const napDurations = mergedNaps.filter(n => n.end).map(n => (new Date(n.end) - new Date(n.start)) / 60000);
+    byDay.push({ date: dateStr, napCount: mergedNaps.length, napDurations });
+  }
+
+  if (byDay.length < 3) {
     trendEl.textContent = t('needMoreData');
     return;
   }
 
-  const recent7 = hist.byDay.slice(0, 7);
+  const recent7 = byDay.slice(0, 7);
   const avgNapCount = recent7.reduce((s, d) => s + d.napCount, 0) / recent7.length;
   const avgTotalSleep = recent7.reduce((s, d) => s + d.napDurations.reduce((a,b) => a+b, 0), 0) / recent7.length;
 
-  const prev7 = hist.byDay.slice(7, 14);
+  const prev7 = byDay.slice(7, 14);
   let trend = '';
   if (prev7.length >= 3) {
     const prevAvgCount = prev7.reduce((s, d) => s + d.napCount, 0) / prev7.length;
@@ -2614,7 +2638,7 @@ function renderWeeklyTrend() {
   }
 
   let bestPattern = '';
-  const ratedDays = hist.byDay.filter(d => data.ratings[d.date] >= 4);
+  const ratedDays = byDay.filter(d => data.ratings[d.date] >= 4);
   if (ratedDays.length >= 2) {
     const avgBestNaps = ratedDays.reduce((s,d) => s + d.napCount, 0) / ratedDays.length;
     bestPattern = `\n${t('bestDays')} ${avgBestNaps.toFixed(1)} ${t('naps')}`;
