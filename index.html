@@ -763,6 +763,8 @@ const i18n = {
     // Past sleep modal
     logPastSleepTitle: '📝 Log Past Sleep',
     logPastSleepDesc: 'Record a nap that already happened.',
+    editSleepTitle: '✏️ Edit Sleep',
+    editSleepDesc: 'Update this sleep record.',
     date: 'Date',
     fellAsleep: 'Fell asleep',
     wokeUp: 'Woke up',
@@ -905,6 +907,8 @@ const i18n = {
     language: '🌐 语言',
     logPastSleepTitle: '📝 记录已过的睡眠',
     logPastSleepDesc: '记录已经发生的小睡。',
+    editSleepTitle: '✏️ 编辑睡眠',
+    editSleepDesc: '更新这条睡眠记录。',
     date: '日期',
     fellAsleep: '入睡时间',
     wokeUp: '醒来时间',
@@ -2326,14 +2330,39 @@ function deleteRecord(id) {
 
 // ---- PAST SLEEP MODAL ----
 let pastSleepType = 'nap';
+let editingRecordId = null;
+
+function editRecord(id) {
+  const rec = data.records.find(r => r.id === id);
+  if (!rec) return;
+  editingRecordId = id;
+  const start = new Date(rec.start);
+  const dateStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
+  document.getElementById('past-date').value = dateStr;
+  document.getElementById('past-start').value = `${String(start.getHours()).padStart(2,'0')}:${String(start.getMinutes()).padStart(2,'0')}`;
+  if (rec.end) {
+    const end = new Date(rec.end);
+    document.getElementById('past-end').value = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
+  } else {
+    document.getElementById('past-end').value = '';
+  }
+  pastSleepType = rec.type || 'nap';
+  updatePastTypeButtons();
+  document.getElementById('past-sleep-title').textContent = t('editSleepTitle');
+  document.getElementById('past-sleep-desc').textContent = t('editSleepDesc');
+  document.getElementById('past-sleep-modal').classList.remove('hidden');
+}
 
 function showPastSleepModal() {
+  editingRecordId = null;
   const now = new Date();
   document.getElementById('past-date').value = todayStr();
   document.getElementById('past-start').value = '';
   document.getElementById('past-end').value = '';
   pastSleepType = 'nap';
   updatePastTypeButtons();
+  document.getElementById('past-sleep-title').textContent = t('logPastSleepTitle');
+  document.getElementById('past-sleep-desc').textContent = t('logPastSleepDesc');
   document.getElementById('past-sleep-modal').classList.remove('hidden');
 }
 
@@ -2352,6 +2381,7 @@ function updatePastTypeButtons() {
 }
 
 function closePastSleepModal() {
+  editingRecordId = null;
   document.getElementById('past-sleep-modal').classList.add('hidden');
 }
 
@@ -2365,8 +2395,20 @@ function savePastSleep() {
   const end = new Date(`${dateVal}T${endVal}:00`);
   if (end <= start) { alert(t('wakeAfterSleep')); return; }
 
-  const rec = { id: uuid(), start: toLocalISOString(start), end: toLocalISOString(end), type: pastSleepType };
-  data.records.push(rec);
+  if (editingRecordId) {
+    // Update existing record
+    const rec = data.records.find(r => r.id === editingRecordId);
+    if (rec) {
+      rec.start = toLocalISOString(start);
+      rec.end = toLocalISOString(end);
+      rec.type = pastSleepType;
+    }
+    editingRecordId = null;
+  } else {
+    // Create new record
+    const rec = { id: uuid(), start: toLocalISOString(start), end: toLocalISOString(end), type: pastSleepType };
+    data.records.push(rec);
+  }
   data.records.sort((a,b) => new Date(a.start) - new Date(b.start));
   saveData(data);
   closePastSleepModal();
@@ -2516,6 +2558,7 @@ function renderDashboard() {
           </div>
           <div class="ev-dur">${minsToHM(durMins)}</div>
           <div class="ev-actions">
+            <button onclick="editRecord('${r.id}')" title="${t('editSleepTitle')}">✏️</button>
             <button onclick="deleteRecord('${r.id}')" title="${t('delete')}">🗑</button>
           </div>
         </div>`;
@@ -2655,6 +2698,10 @@ function renderHistDetail() {
       <span class="nap-num" style="${isNight ? 'color:#5b6999' : ''}">${isNight ? '🌙' : '💤'} ${label}</span>
       <span class="nap-times">${formatTime(start)} – ${end ? formatTime(end) : '...'}</span>
       <span class="nap-dur">${dur}</span>
+      <span class="nap-actions">
+        <button onclick="editRecord('${r.id}')" title="${t('editSleepTitle')}">✏️</button>
+        <button onclick="deleteRecord('${r.id}')" title="${t('delete')}">🗑</button>
+      </span>
     </li>`;
   }).join('') + '</ul>';
 
