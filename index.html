@@ -705,6 +705,7 @@ const i18n = {
     onTrack: '🟢 On track',
     gettingTight: '🟡 Getting tight',
     offSchedule: '🔴 Off schedule',
+    overdue: '⏰ Overdue — nap now!',
     sleepingStatus: '😴 Sleeping',
     noDataYet: 'No data yet — using age-based defaults.',
     napDecision: '🤔 Nap Decision',
@@ -852,6 +853,7 @@ const i18n = {
     onTrack: '🟢 正常',
     gettingTight: '🟡 偏紧',
     offSchedule: '🔴 偏离计划',
+    overdue: '⏰ 超时了 — 该小睡了！',
     sleepingStatus: '😴 睡眠中',
     noDataYet: '暂无数据 — 使用基于月龄的默认值。',
     napDecision: '🤔 小睡决策',
@@ -1851,7 +1853,6 @@ function computePrediction() {
       bedPred = 0.65 * bedPred + 0.35 * avgBed;
     }
     // Clamp: not before now+10, not absurdly late
-    bedPred = Math.max(bedPred, nowMins + 10);
     bedPred = Math.min(bedPred, bounds.bedMins + 60);
 
     // Night duration prediction
@@ -1872,8 +1873,8 @@ function computePrediction() {
       type: 'bedtime',
       time: minsToDate(bedPred),
       timeMins: bedPred,
-      earliest: minsToDate(Math.max(bedPred - 20, nowMins + 5)),
-      earliestMins: Math.max(bedPred - 20, nowMins + 5),
+      earliest: minsToDate(bedPred - 20),
+      earliestMins: bedPred - 20,
       latest: minsToDate(bedPred + 20),
       latestMins: bedPred + 20,
       sleeping: false,
@@ -1934,12 +1935,11 @@ function computePrediction() {
   }
 
   let prediction = lastWakeMins + baseWW * napAdj + debtAdj;
-  prediction = Math.max(prediction, nowMins + 5);
 
   // Confidence range
   const allWWs = [...(hist.ww2nap[nextNapPos] || []), ...(hist.ww3nap[nextNapPos] || [])];
   const stddev = arrStdev(allWWs);
-  const earliest = Math.max(prediction - Math.min(stddev * 0.8, 25), nowMins + 3);
+  const earliest = prediction - Math.min(stddev * 0.8, 25);
   const latest = prediction + Math.min(stddev * 0.8, 25);
 
   // ---- Transition detection ----
@@ -2226,17 +2226,27 @@ function updateTimer() {
     toggleText.textContent = t('endSleep');
   } else {
     const todayRecs = getTodayRecords();
-    const completedNaps = todayRecs.filter(r => r.end !== null);
+    const completedNaps = todayRecs.filter(r => r.end !== null && r.type !== 'night');
     let lastWake;
     if (completedNaps.length > 0) {
       lastWake = new Date(completedNaps[completedNaps.length - 1].end);
     } else {
-      const s = getSettings();
-      const wakeMins = parseTime(s.morningWake);
-      lastWake = new Date();
-      lastWake.setHours(0, 0, 0, 0);
-      lastWake.setMinutes(wakeMins);
-      if (lastWake > new Date()) lastWake = new Date();
+      // Check for night sleep ending today (actual wake time) — night records start on previous day
+      const todayString = todayStr();
+      const nightEndingToday = data.records.filter(r =>
+        (r.type === 'night' || classifyRecord(r).type === 'night') &&
+        r.end && toLocalDateStr(new Date(r.end)) === todayString
+      );
+      if (nightEndingToday.length > 0) {
+        lastWake = new Date(nightEndingToday[nightEndingToday.length - 1].end);
+      } else {
+        const s = getSettings();
+        const wakeMins = parseTime(s.morningWake);
+        lastWake = new Date();
+        lastWake.setHours(0, 0, 0, 0);
+        lastWake.setMinutes(wakeMins);
+        if (lastWake > new Date()) lastWake = new Date();
+      }
     }
     const elapsed = Math.max(0, (Date.now() - lastWake.getTime()) / 60000);
     const maxRing = 240; // full ring at 4 hours awake
@@ -2457,7 +2467,11 @@ function renderDashboard() {
     document.getElementById('pred-reason').textContent = pred.reasons.join('\n');
 
     const pEl = document.getElementById('pressure');
-    if (pred.pressureLevel === 'green') { pEl.className = 'pressure green'; pEl.textContent = t('onTrack'); }
+    const nowMins = dateToMins(new Date());
+    if (pred.timeMins <= nowMins) {
+      // Predicted time has passed — show overdue
+      pEl.className = 'pressure red'; pEl.textContent = t('overdue');
+    } else if (pred.pressureLevel === 'green') { pEl.className = 'pressure green'; pEl.textContent = t('onTrack'); }
     else if (pred.pressureLevel === 'yellow') { pEl.className = 'pressure yellow'; pEl.textContent = t('gettingTight'); }
     else { pEl.className = 'pressure red'; pEl.textContent = t('offSchedule'); }
   }
