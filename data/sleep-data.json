@@ -320,16 +320,16 @@
     },
     {
       "id": "a41ec089-0dee-407a-991f-907c83fd12af",
-      "start": "2026-03-17T20:12:00",
-      "end": "2026-03-18T08:37:34",
+      "start": "2026-03-17T20:10:00",
+      "end": "2026-03-18T07:45:00",
       "type": "night"
     }
   ],
   "ratings": {},
   "settings": {
-    "morningWake": "07:30",
+    "morningWake": "06:30",
     "bedtime": "19:00",
     "babyAgeMonths": 7
   },
-  "lastUpdated": "2026-03-18T17:07:54.072Z"
+  "lastUpdated": "2026-03-18T17:52:59.251Z"
 }
