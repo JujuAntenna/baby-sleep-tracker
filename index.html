@@ -1563,6 +1563,12 @@ async function checkAuth() {
 
   // Token valid — check session
   if (sessionStorage.getItem('bs_auth') === 'true') {
+    // Restore PIN from session to decrypt GitHub token
+    const savedPin = sessionStorage.getItem('bs_pin');
+    if (savedPin) {
+      sessionPin = savedPin;
+      await loadGhToken();
+    }
     showScreen('app');
     initApp();
     return;
@@ -1592,6 +1598,7 @@ async function checkPin() {
   const storedHash = data.settings.pinHash || DEFAULT_PIN_HASH;
   if (pinHash === storedHash) {
     sessionStorage.setItem('bs_auth', 'true');
+    sessionStorage.setItem('bs_pin', pin);
     sessionPin = pin; // Keep PIN in memory for token encryption
     await loadGhToken(); // Decrypt GitHub token
     showScreen('app');
