@@ -361,6 +361,9 @@ body {
   font-size: 0.85em; line-height: 1.4;
   background: rgba(124,140,191,0.1); color: var(--accent);
 }
+.banner.wake-missing {
+  background: rgba(255,170,51,0.15); color: #b87a00;
+}
 </style>
 </head>
 <body>
@@ -438,6 +441,16 @@ body {
       <button class="add-past-btn" onclick="showPastSleepModal()">
         <span>＋</span> Log a past sleep
       </button>
+    </div>
+
+    <!-- Missing wake time banner -->
+    <div class="banner wake-missing hidden" id="wake-missing-banner">
+      <span id="wake-missing-text">⚠️ No night sleep logged — wake time unknown</span>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+        <input type="time" id="quick-wake-time" value="07:30" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.9em">
+        <button onclick="quickSetWake()" style="padding:4px 12px;border-radius:6px;background:var(--accent);color:#fff;border:none;font-size:0.9em;cursor:pointer" id="quick-wake-btn">Set wake time</button>
+        <button onclick="showPastSleepModal()" style="padding:4px 12px;border-radius:6px;background:var(--card);color:var(--text);border:1px solid var(--border);font-size:0.9em;cursor:pointer" id="quick-log-night-btn">Log night sleep</button>
+      </div>
     </div>
 
     <!-- Transition banner -->
@@ -814,6 +827,10 @@ const i18n = {
     tokenHashLabel: 'Token hash',
     pinHashLabel: 'PIN hash',
     logPastBtn: 'Log a past sleep',
+    wakeMissing: '⚠️ No night sleep logged — wake time unknown',
+    setWakeTime: 'Set wake time',
+    logNightSleep: 'Log night sleep',
+    wakeTimeUnknown: 'Wake time not set',
     // Calendar
     calDaysEn: 'S,M,T,W,T,F,S',
     calDaysZh: '日,一,二,三,四,五,六',
@@ -955,6 +972,10 @@ const i18n = {
     tokenHashLabel: '令牌哈希',
     pinHashLabel: '密码哈希',
     logPastBtn: '记录已过的睡眠',
+    wakeMissing: '⚠️ 未记录夜间睡眠 — 起床时间未知',
+    setWakeTime: '设置起床时间',
+    logNightSleep: '记录夜间睡眠',
+    wakeTimeUnknown: '起床时间未设置',
     calDays: '日,一,二,三,四,五,六',
   },
 };
@@ -1746,11 +1767,15 @@ function computePrediction() {
 
   // Morning wake from night sleep
   let morningWakeMins = bounds.wakeMins;
+  let morningWakeKnown = false;
   data.records.filter(r => r.type === 'night' && r.end).forEach(r => {
     if (toLocalDateStr(new Date(r.end)) === todayStr()) {
       morningWakeMins = dateToMins(new Date(r.end));
+      morningWakeKnown = true;
     }
   });
+  // If we have naps today, we know the baby is awake even without night record
+  if (completedNaps.length > 0) morningWakeKnown = true;
 
   // Last wake time
   let lastWakeMins;
@@ -1892,6 +1917,7 @@ function computePrediction() {
       nightDurPred: nightDurPred,
       morningWakePred: morningWakePred ? minsToDate(morningWakePred) : null,
       morningWakeMins: morningWakePred,
+      wakeMissing: false,
     };
   }
 
@@ -2074,6 +2100,7 @@ function computePrediction() {
     nightDurPred: nightPred ? Math.round(nightPred) : null,
     morningWakePred: morningWakePred ? minsToDate(morningWakePred) : null,
     morningWakeMins: morningWakePred,
+    wakeMissing: !morningWakeKnown && !sleeping,
   };
 }
 
@@ -2146,6 +2173,7 @@ let histYear, histMonth, histSelectedDate;
 function initApp() {
   const s = getSettings();
   document.getElementById('set-wake').value = s.morningWake;
+  document.getElementById('quick-wake-time').value = s.morningWake;
   document.getElementById('set-bed').value = s.bedtime;
   document.getElementById('set-age').value = s.babyAgeMonths;
   document.getElementById('set-token-hash').value = s.tokenHash || DEFAULT_TOKEN_HASH;
@@ -2191,6 +2219,44 @@ function startTimer() {
   updateTimer();
 }
 
+function isMorningWakeMissing() {
+  // Returns true if it's not currently sleeping, no naps today, and no night sleep ending today
+  if (isCurrentlySleeping()) return false;
+  const todayRecs = getTodayRecords();
+  const completedNaps = todayRecs.filter(r => r.end !== null && r.type !== 'night');
+  if (completedNaps.length > 0) return false;
+  const todayString = todayStr();
+  const nightEndingToday = data.records.filter(r =>
+    (r.type === 'night' || classifyRecord(r).type === 'night') &&
+    r.end && toLocalDateStr(new Date(r.end)) === todayString
+  );
+  return nightEndingToday.length === 0;
+}
+
+function quickSetWake() {
+  const timeVal = document.getElementById('quick-wake-time').value;
+  if (!timeVal) return;
+  // Create a synthetic night sleep record ending at the specified wake time
+  // Use bedtime setting from yesterday as approximate start
+  const s = getSettings();
+  const todayDate = todayStr();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = toLocalDateStr(yesterday);
+  
+  const rec = {
+    id: crypto.randomUUID(),
+    start: yesterdayDate + 'T' + s.bedtime + ':00',
+    end: todayDate + 'T' + timeVal + ':00',
+    type: 'night'
+  };
+  data.records.push(rec);
+  saveData();
+  document.getElementById('wake-missing-banner').classList.add('hidden');
+  renderDashboard();
+  updateTimer();
+}
+
 function updateTimer() {
   const sleeping = isCurrentlySleeping();
   const ringWrap = document.getElementById('timer-ring-wrap');
@@ -2229,6 +2295,7 @@ function updateTimer() {
     const todayRecs = getTodayRecords();
     const completedNaps = todayRecs.filter(r => r.end !== null && r.type !== 'night');
     let lastWake;
+    let wakeMissing = false;
     if (completedNaps.length > 0) {
       lastWake = new Date(completedNaps[completedNaps.length - 1].end);
     } else {
@@ -2241,6 +2308,8 @@ function updateTimer() {
       if (nightEndingToday.length > 0) {
         lastWake = new Date(nightEndingToday[nightEndingToday.length - 1].end);
       } else {
+        wakeMissing = true;
+        // Still set a fallback for the timer, but we'll flag the UI
         const s = getSettings();
         const wakeMins = parseTime(s.morningWake);
         lastWake = new Date();
@@ -2249,6 +2318,18 @@ function updateTimer() {
         if (lastWake > new Date()) lastWake = new Date();
       }
     }
+
+    // Show/hide the wake-missing banner
+    const wakeBanner = document.getElementById('wake-missing-banner');
+    if (wakeMissing) {
+      wakeBanner.classList.remove('hidden');
+      document.getElementById('wake-missing-text').textContent = t('wakeMissing');
+      document.getElementById('quick-wake-btn').textContent = t('setWakeTime');
+      document.getElementById('quick-log-night-btn').textContent = t('logNightSleep');
+    } else {
+      wakeBanner.classList.add('hidden');
+    }
+
     const elapsed = Math.max(0, (Date.now() - lastWake.getTime()) / 60000);
     const maxRing = 240; // full ring at 4 hours awake
     const progress = Math.min(elapsed / maxRing, 1);
@@ -2259,9 +2340,9 @@ function updateTimer() {
     ringFg.setAttribute('stroke-dashoffset', circumference * (1 - progress));
 
     icon.textContent = '☀️';
-    label.textContent = t('awake');
-    value.textContent = formatElapsed(elapsed);
-    since.textContent = `${t('since')} ${formatTime(lastWake)}`;
+    label.textContent = wakeMissing ? t('wakeTimeUnknown') : t('awake');
+    value.textContent = wakeMissing ? '--:--' : formatElapsed(elapsed);
+    since.textContent = wakeMissing ? '' : `${t('since')} ${formatTime(lastWake)}`;
 
     toggleBtn.className = 'toggle-btn start-sleep';
     toggleIcon.textContent = '🌙';
@@ -2462,10 +2543,15 @@ function renderDashboard() {
     document.getElementById('pressure').textContent = t('predBedtime');
   } else {
     document.getElementById('pred-card-title').textContent = '📊 ' + t('nextNapPrediction');
-    document.getElementById('pred-time').textContent = formatTime(pred.time);
+    if (pred.wakeMissing) {
+      document.getElementById('pred-time').textContent = '~' + formatTime(pred.time) + ' ⚠️';
+      document.getElementById('pred-reason').textContent = t('wakeMissing') + '\n' + pred.reasons.join('\n');
+    } else {
+      document.getElementById('pred-time').textContent = formatTime(pred.time);
+      document.getElementById('pred-reason').textContent = pred.reasons.join('\n');
+    }
     document.getElementById('pred-early').textContent = pred.earliest ? formatTime(pred.earliest) : '--';
     document.getElementById('pred-late').textContent = pred.latest ? formatTime(pred.latest) : '--';
-    document.getElementById('pred-reason').textContent = pred.reasons.join('\n');
 
     const pEl = document.getElementById('pressure');
     const nowMins = dateToMins(new Date());
