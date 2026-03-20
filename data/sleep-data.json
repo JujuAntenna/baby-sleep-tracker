@@ -363,7 +363,7 @@
     {
       "id": "ade2203e-9211-4fe4-b79e-7043c1b38ccb",
       "start": "2026-03-19T20:01:24",
-      "end": null,
+      "end": "2026-03-20T07:49:49",
       "type": "night"
     }
   ],
@@ -373,5 +373,5 @@
     "bedtime": "19:00",
     "babyAgeMonths": 7
   },
-  "lastUpdated": "2026-03-20T03:06:38.304Z"
+  "lastUpdated": "2026-03-20T14:49:51.324Z"
 }
