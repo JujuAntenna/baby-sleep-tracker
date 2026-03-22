@@ -395,6 +395,12 @@
       "start": "2026-03-21T13:20:00",
       "end": "2026-03-21T14:00:00",
       "type": "nap"
+    },
+    {
+      "id": "4a947a18-fa5c-416d-b2ae-bb661768b666",
+      "start": "2026-03-21T19:17:06",
+      "end": null,
+      "type": "night"
     }
   ],
   "ratings": {},
@@ -403,5 +409,5 @@
     "bedtime": "19:00",
     "babyAgeMonths": 7
   },
-  "lastUpdated": "2026-03-21T21:12:21.558Z"
+  "lastUpdated": "2026-03-22T02:17:08.924Z"
 }
