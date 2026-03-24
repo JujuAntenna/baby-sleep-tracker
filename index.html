@@ -72,28 +72,85 @@ body {
 .auth-toggle:hover { text-decoration: underline; }
 
 /* Baby select */
-.baby-list { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; max-width: 360px; width: 100%; }
+/* Baby select screen */
+.baby-select-welcome { margin-bottom: 24px; }
+.baby-select-welcome h2 { font-size: 1.4em; margin-bottom: 4px; }
+.baby-select-welcome p { color: var(--text2); font-size: 0.9em; }
+
+.baby-list { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; max-width: 400px; width: 100%; }
 .baby-item {
-  display: flex; align-items: center; gap: 12px; padding: 16px;
+  display: flex; align-items: center; gap: 16px; padding: 18px 20px;
   background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
-  cursor: pointer; transition: transform 0.1s;
+  cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  border: 2px solid transparent;
 }
+.baby-item:hover { box-shadow: 0 4px 20px rgba(124,140,191,0.2); border-color: var(--accent2); }
 .baby-item:active { transform: scale(0.97); }
-.baby-item .baby-emoji { font-size: 2em; }
+.baby-item .baby-emoji {
+  font-size: 2.4em; width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); border-radius: 50%;
+  flex-shrink: 0;
+}
 .baby-item .baby-info { flex: 1; text-align: left; }
-.baby-item .baby-name { font-weight: 600; font-size: 1.1em; }
+.baby-item .baby-name { font-weight: 600; font-size: 1.15em; margin-bottom: 2px; }
 .baby-item .baby-age { font-size: 0.85em; color: var(--text2); }
+.baby-item .baby-arrow { color: var(--accent2); font-size: 1.2em; flex-shrink: 0; }
+
+/* Add baby card */
 .add-baby-card {
   background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
-  padding: 24px; max-width: 360px; width: 100%; text-align: left;
+  padding: 28px 24px; max-width: 400px; width: 100%; text-align: left;
 }
-.add-baby-card h3 { margin-bottom: 12px; text-align: center; }
-.emoji-picker { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 8px 0; }
+.add-baby-card h3 {
+  margin-bottom: 20px; text-align: center; font-size: 1.15em;
+}
+.add-baby-field { margin-bottom: 16px; }
+.add-baby-field label {
+  font-size: 0.85em; font-weight: 600; display: block;
+  margin-bottom: 6px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.3px;
+}
+.add-baby-field input[type="text"],
+.add-baby-field input[type="date"] {
+  width: 100%; padding: 12px 16px; border: 2px solid var(--bg2); border-radius: 12px;
+  background: var(--bg); color: var(--text); font-size: 1em;
+  transition: border-color 0.2s; outline: none;
+}
+.add-baby-field input:focus { border-color: var(--accent); }
+
+/* Emoji picker */
+.emoji-picker-label { font-size: 0.85em; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 10px; }
+.emoji-picker { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 8px 0 16px; }
 .emoji-picker button {
-  font-size: 1.8em; background: none; border: 2px solid transparent; border-radius: 10px;
-  padding: 4px 8px; cursor: pointer;
+  font-size: 1.6em; background: var(--bg); border: 2px solid transparent; border-radius: 12px;
+  width: 52px; height: 52px; cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
 }
-.emoji-picker button.selected { border-color: var(--accent); background: var(--bg); }
+.emoji-picker button:hover { background: var(--bg2); transform: scale(1.08); }
+.emoji-picker button.selected {
+  border-color: var(--accent); background: rgba(124,140,191,0.12);
+  transform: scale(1.12); box-shadow: 0 2px 8px rgba(124,140,191,0.25);
+}
+
+/* Big emoji preview */
+.emoji-preview {
+  text-align: center; margin-bottom: 16px;
+}
+.emoji-preview .preview-emoji {
+  font-size: 4em; width: 100px; height: 100px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg); border-radius: 50%; margin-bottom: 4px;
+  transition: transform 0.2s;
+}
+.emoji-preview p { font-size: 0.8em; color: var(--text2); }
+
+/* No babies empty state */
+.no-babies-state {
+  text-align: center; padding: 30px 20px;
+}
+.no-babies-state .empty-icon { font-size: 4em; margin-bottom: 12px; opacity: 0.6; }
+.no-babies-state h3 { font-size: 1.1em; margin-bottom: 6px; }
+.no-babies-state p { color: var(--text2); font-size: 0.9em; line-height: 1.4; }
 
 /* Loading overlay */
 .loading-overlay {
@@ -457,30 +514,38 @@ body {
      ============================================ -->
 <div id="baby-select-screen" class="hidden">
   <div class="auth-logo">🌙💤</div>
-  <h2 id="baby-select-title" style="margin-bottom:16px">Select Baby</h2>
+  <div class="baby-select-welcome">
+    <h2 id="baby-select-title">Select Baby</h2>
+    <p id="baby-select-subtitle">Choose who you're tracking today</p>
+  </div>
   <div class="baby-list" id="baby-list"></div>
-  <button class="btn btn-outline" onclick="showAddBabyForm()" id="add-baby-btn" style="max-width:360px;width:100%">
-    ＋ Add Baby
+  <button class="btn btn-outline" onclick="showAddBabyForm()" id="add-baby-btn" style="max-width:400px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px">
+    <span style="font-size:1.2em">＋</span> <span id="add-baby-btn-text">Add Baby</span>
   </button>
   <div class="add-baby-card hidden" id="add-baby-form" style="margin-top:16px">
-    <h3 id="add-baby-title">Add Baby</h3>
-    <div class="form-group" style="margin-bottom:12px">
+    <div class="emoji-preview">
+      <div class="preview-emoji" id="emoji-preview-display">👶</div>
+      <p id="emoji-preview-hint">Tap to choose an emoji</p>
+    </div>
+    <div class="emoji-picker" id="emoji-picker"></div>
+    <div class="add-baby-field">
       <label id="add-baby-name-label">Name</label>
-      <input type="text" id="add-baby-name" placeholder="Baby's name" style="width:100%;padding:10px 14px;border:2px solid var(--accent2);border-radius:10px;background:var(--bg);color:var(--text);font-size:1em">
+      <input type="text" id="add-baby-name" placeholder="Luna, Max, 小宝..." autocomplete="off">
     </div>
-    <div class="form-group" style="margin-bottom:12px">
+    <div class="add-baby-field">
       <label id="add-baby-birth-label">Birth Date</label>
-      <input type="date" id="add-baby-birth" style="width:100%;padding:10px 14px;border:2px solid var(--accent2);border-radius:10px;background:var(--bg);color:var(--text);font-size:1em">
+      <input type="date" id="add-baby-birth" onchange="onBirthDateChange(this.value)">
     </div>
-    <div class="form-group" style="margin-bottom:12px">
-      <label>Emoji</label>
-      <div class="emoji-picker" id="emoji-picker"></div>
+    <div class="add-baby-field">
+      <label id="add-baby-age-label">Age (months)</label>
+      <input type="number" id="add-baby-age" min="1" max="36" placeholder="7" style="width:100%;padding:12px 16px;border:2px solid var(--bg2);border-radius:12px;background:var(--bg);color:var(--text);font-size:1em;outline:none">
+      <p style="font-size:0.75em;color:var(--text2);margin-top:4px" id="add-baby-age-hint">Used for nap predictions if birth date isn't set</p>
     </div>
-    <button class="btn btn-primary" onclick="addBaby()" id="save-baby-btn">Save</button>
-    <button class="btn btn-outline" onclick="hideAddBabyForm()" style="margin-top:4px">Cancel</button>
+    <button class="btn btn-primary" onclick="addBaby()" id="save-baby-btn" style="margin-top:8px">Save</button>
+    <button class="btn btn-outline" onclick="hideAddBabyForm()" style="margin-top:4px" id="cancel-baby-btn">Cancel</button>
   </div>
   <div style="margin-top:24px">
-    <button class="btn btn-outline" onclick="handleLogout()" id="logout-from-select" style="max-width:360px;width:100%">Logout</button>
+    <button class="btn btn-outline" onclick="handleLogout()" id="logout-from-select" style="max-width:400px;width:100%;opacity:0.6;font-size:0.9em">Logout</button>
   </div>
 </div>
 
@@ -867,11 +932,19 @@ const i18n = {
     hasAccount: 'Already have an account?',
     // Baby select
     selectBaby: 'Select Baby',
+    selectBabySubtitle: 'Choose who you\'re tracking today',
     addBaby: 'Add Baby',
     babyName: 'Name',
+    babyNamePlaceholder: 'Luna, Max, 小宝...',
     birthDate: 'Birth Date',
+    ageMonthsLabel: 'Age (months)',
+    ageMonthsHint: 'Used for nap predictions if birth date isn\'t set',
+    tapToChooseEmoji: 'Tap to choose an emoji',
     noBabiesYet: 'No babies yet!',
-    createFirst: 'Add your first baby to get started.',
+    createFirst: 'Add your first baby to get started tracking their sleep.',
+    newborn: 'Newborn',
+    months: 'months',
+    years: 'years',
     // Account
     account: '👤 Account',
     changePassword: 'Change Password',
@@ -1013,11 +1086,19 @@ const i18n = {
     hasAccount: '已有账号？',
     // Baby select
     selectBaby: '选择宝宝',
+    selectBabySubtitle: '选择今天要追踪的宝宝',
     addBaby: '添加宝宝',
     babyName: '名字',
+    babyNamePlaceholder: '小宝, Luna, Max...',
     birthDate: '出生日期',
+    ageMonthsLabel: '月龄',
+    ageMonthsHint: '如果未设置出生日期，将用于小睡预测',
+    tapToChooseEmoji: '点击选择表情',
     noBabiesYet: '还没有宝宝！',
-    createFirst: '添加你的第一个宝宝开始使用。',
+    createFirst: '添加你的第一个宝宝，开始追踪睡眠。',
+    newborn: '新生儿',
+    months: '个月',
+    years: '岁',
     // Account
     account: '👤 账户',
     changePassword: '修改密码',
@@ -1145,9 +1226,15 @@ function updateStaticText() {
 
   // Baby select
   setText('baby-select-title', 'selectBaby');
-  setText('add-baby-title', 'addBaby');
+  setText('baby-select-subtitle', 'selectBabySubtitle');
+  setText('add-baby-btn-text', 'addBaby');
   setText('add-baby-name-label', 'babyName');
   setText('add-baby-birth-label', 'birthDate');
+  setText('add-baby-age-label', 'ageMonthsLabel');
+  setText('add-baby-age-hint', 'ageMonthsHint');
+  setText('emoji-preview-hint', 'tapToChooseEmoji');
+  const nameInput = document.getElementById('add-baby-name');
+  if (nameInput) nameInput.placeholder = t('babyNamePlaceholder');
 
   // Change password modal
   setText('change-pw-title', 'changePassword');
@@ -1639,7 +1726,7 @@ async function submitChangePassword() {
 // ============================================
 // BABY MANAGEMENT
 // ============================================
-const BABY_EMOJIS = ['👶', '🍼', '🧸', '🌟', '🐣', '🐰', '🦊', '🐱', '🐶', '🦁', '🐨', '🐼'];
+const BABY_EMOJIS = ['👶', '👧', '👦', '🍼', '🧸', '🌙', '⭐', '🌟', '🐣', '🐰', '🦊', '🐱', '🐶', '🦁', '🐨', '🐼', '🦄', '🐳', '🌸', '🍀'];
 let selectedBabyEmoji = '👶';
 
 function showScreen(id) {
@@ -1667,32 +1754,52 @@ async function renderBabySelector() {
   const babies = await loadBabies();
 
   if (babies.length === 0) {
-    listEl.innerHTML = '<div style="text-align:center;color:var(--text2);padding:20px">' +
-      '<p style="font-size:1.2em;margin-bottom:8px">' + t('noBabiesYet') + '</p>' +
+    listEl.innerHTML = '<div class="no-babies-state">' +
+      '<div class="empty-icon">🍼</div>' +
+      '<h3>' + t('noBabiesYet') + '</h3>' +
       '<p>' + t('createFirst') + '</p></div>';
     showAddBabyForm();
+    document.getElementById('add-baby-btn').classList.add('hidden');
     return;
   }
 
+  document.getElementById('add-baby-btn').classList.remove('hidden');
+
   listEl.innerHTML = babies.map(b => {
-    const ageMonths = b.birth_date ? Math.floor((Date.now() - new Date(b.birth_date).getTime()) / (30.44 * 24 * 60 * 60 * 1000)) : '?';
+    let ageText = '';
+    if (b.birth_date) {
+      const months = Math.floor((Date.now() - new Date(b.birth_date).getTime()) / (30.44 * 24 * 60 * 60 * 1000));
+      if (months < 1) ageText = t('newborn') || 'Newborn';
+      else if (months < 24) ageText = months + ' ' + (t('months') || 'months');
+      else ageText = Math.floor(months / 12) + ' ' + (t('years') || 'years');
+    }
     return '<div class="baby-item" onclick="selectBaby(\'' + b.id + '\')">' +
       '<div class="baby-emoji">' + (b.emoji || '👶') + '</div>' +
       '<div class="baby-info">' +
         '<div class="baby-name">' + (b.name || 'Baby') + '</div>' +
-        '<div class="baby-age">' + ageMonths + ' ' + t('babyAge').toLowerCase().replace('(months)','').replace('（月）','').trim() + '</div>' +
-      '</div></div>';
+        (ageText ? '<div class="baby-age">' + ageText + '</div>' : '') +
+      '</div>' +
+      '<div class="baby-arrow">›</div>' +
+    '</div>';
   }).join('');
 }
 
 function showAddBabyForm() {
   document.getElementById('add-baby-form').classList.remove('hidden');
+  document.getElementById('add-baby-btn').classList.add('hidden');
   selectedBabyEmoji = '👶';
+  document.getElementById('emoji-preview-display').textContent = '👶';
+  document.getElementById('add-baby-name').value = '';
+  document.getElementById('add-baby-birth').value = '';
+  document.getElementById('add-baby-age').value = '';
   renderEmojiPicker();
+  // Auto-focus the name field
+  setTimeout(() => document.getElementById('add-baby-name').focus(), 100);
 }
 
 function hideAddBabyForm() {
   document.getElementById('add-baby-form').classList.add('hidden');
+  document.getElementById('add-baby-btn').classList.remove('hidden');
 }
 
 function renderEmojiPicker() {
@@ -1704,16 +1811,40 @@ function renderEmojiPicker() {
 
 function pickEmoji(emoji) {
   selectedBabyEmoji = emoji;
+  document.getElementById('emoji-preview-display').textContent = emoji;
+  // Animate the preview
+  const preview = document.getElementById('emoji-preview-display');
+  preview.style.transform = 'scale(1.15)';
+  setTimeout(() => preview.style.transform = '', 200);
   renderEmojiPicker();
+}
+
+function onBirthDateChange(val) {
+  if (!val) return;
+  const months = Math.max(1, Math.floor((Date.now() - new Date(val).getTime()) / (30.44 * 24 * 60 * 60 * 1000)));
+  document.getElementById('add-baby-age').value = months;
 }
 
 async function addBaby() {
   const name = document.getElementById('add-baby-name').value.trim();
   const birthDate = document.getElementById('add-baby-birth').value;
+  const ageInput = document.getElementById('add-baby-age').value;
   if (!name) { alert(t('fillAllFields')); return; }
 
+  // Calculate age in months
+  let ageMonths = 7; // default
+  if (birthDate) {
+    ageMonths = Math.max(1, Math.floor((Date.now() - new Date(birthDate).getTime()) / (30.44 * 24 * 60 * 60 * 1000)));
+  } else if (ageInput) {
+    ageMonths = parseInt(ageInput) || 7;
+  }
+
+  const saveBtn = document.getElementById('save-baby-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = t('loading');
+
   const { data: { user } } = await sb.auth.getUser();
-  if (!user) return;
+  if (!user) { saveBtn.disabled = false; saveBtn.textContent = t('save'); return; }
 
   const { data: baby, error } = await sb.from('babies').insert({
     user_id: user.id,
@@ -1725,9 +1856,22 @@ async function addBaby() {
   if (error) {
     console.error('addBaby error:', error);
     alert(error.message);
+    saveBtn.disabled = false;
+    saveBtn.textContent = t('save');
     return;
   }
 
+  // Create initial settings with the baby's age
+  await sb.from('settings').insert({
+    baby_id: baby.id,
+    user_id: user.id,
+    morning_wake: '07:30',
+    bedtime: '19:00',
+    baby_age_months: ageMonths,
+  });
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = t('save');
   selectBaby(baby.id);
 }
 
