@@ -734,7 +734,10 @@ body {
 // ---- SUPABASE CONFIG ----
 const SUPABASE_URL = 'https://fukbuynaqwfzllsdovym.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1a2J1eW5hcXdmemxsc2RvdnltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzODk1NDEsImV4cCI6MjA4OTk2NTU0MX0.PqTWW6broDuUdUnREp1HUsV6oViBAwqXKpcU3nNTaSs';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+console.log('[boot] window.supabase type:', typeof window.supabase);
+console.log('[boot] window.supabase.createClient type:', typeof (window.supabase && window.supabase.createClient));
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+console.log('[boot] Supabase client created:', !!sb);
 
 // ---- INTERNATIONALIZATION ----
 const LANG_KEY = 'babySleepLang';
@@ -1179,7 +1182,7 @@ const DataService = {
     if (!this.currentBabyId) return this._cache;
     try {
       // Load sleep records
-      const { data: records, error: recErr } = await supabase
+      const { data: records, error: recErr } = await sb
         .from('sleep_logs')
         .select('*')
         .eq('baby_id', this.currentBabyId)
@@ -1193,7 +1196,7 @@ const DataService = {
       }));
 
       // Load settings
-      const { data: settings, error: setErr } = await supabase
+      const { data: settings, error: setErr } = await sb
         .from('settings')
         .select('*')
         .eq('baby_id', this.currentBabyId)
@@ -1208,7 +1211,7 @@ const DataService = {
       } else {
         this._cache.settings = this._defaultSettings();
         // Create default settings row
-        await supabase.from('settings').insert({
+        await sb.from('settings').insert({
           baby_id: this.currentBabyId,
           user_id: this.currentUserId,
           morning_wake: '07:30',
@@ -1218,7 +1221,7 @@ const DataService = {
       }
 
       // Load ratings
-      const { data: ratings, error: ratErr } = await supabase
+      const { data: ratings, error: ratErr } = await sb
         .from('ratings')
         .select('*')
         .eq('baby_id', this.currentBabyId);
@@ -1257,7 +1260,7 @@ const DataService = {
     localStorage.setItem('cache_' + this.currentBabyId, JSON.stringify(this._cache));
 
     try {
-      const { error } = await supabase.from('sleep_logs').upsert({
+      const { error } = await sb.from('sleep_logs').upsert({
         id: record.id,
         baby_id: this.currentBabyId,
         user_id: this.currentUserId,
@@ -1277,7 +1280,7 @@ const DataService = {
     localStorage.setItem('cache_' + this.currentBabyId, JSON.stringify(this._cache));
 
     try {
-      const { error } = await supabase.from('sleep_logs').delete().eq('id', id);
+      const { error } = await sb.from('sleep_logs').delete().eq('id', id);
       if (error) throw error;
     } catch (e) {
       console.error('deleteRecord error:', e);
@@ -1296,7 +1299,7 @@ const DataService = {
     if (!col) return;
 
     try {
-      const { error } = await supabase.from('settings')
+      const { error } = await sb.from('settings')
         .update({ [col]: value })
         .eq('baby_id', this.currentBabyId);
       if (error) throw error;
@@ -1311,7 +1314,7 @@ const DataService = {
     localStorage.setItem('cache_' + this.currentBabyId, JSON.stringify(this._cache));
 
     try {
-      const { error } = await supabase.from('ratings').upsert({
+      const { error } = await sb.from('ratings').upsert({
         baby_id: this.currentBabyId,
         user_id: this.currentUserId,
         date: date,
@@ -1343,7 +1346,7 @@ const DataService = {
     for (const item of queue) {
       try {
         if (item.action === 'upsert_record') {
-          await supabase.from('sleep_logs').upsert({
+          await sb.from('sleep_logs').upsert({
             id: item.record.id,
             baby_id: this.currentBabyId,
             user_id: this.currentUserId,
@@ -1352,15 +1355,15 @@ const DataService = {
             type: item.record.type,
           });
         } else if (item.action === 'delete_record') {
-          await supabase.from('sleep_logs').delete().eq('id', item.id);
+          await sb.from('sleep_logs').delete().eq('id', item.id);
         } else if (item.action === 'save_setting') {
           const colMap = { morningWake: 'morning_wake', bedtime: 'bedtime', babyAgeMonths: 'baby_age_months' };
           const col = colMap[item.key];
           if (col) {
-            await supabase.from('settings').update({ [col]: item.value }).eq('baby_id', this.currentBabyId);
+            await sb.from('settings').update({ [col]: item.value }).eq('baby_id', this.currentBabyId);
           }
         } else if (item.action === 'save_rating') {
-          await supabase.from('ratings').upsert({
+          await sb.from('ratings').upsert({
             baby_id: this.currentBabyId,
             date: item.date,
             score: item.score,
@@ -1557,7 +1560,7 @@ async function handleAuth() {
       // Check invite code if provided
       const inviteCode = document.getElementById('auth-invite').value.trim();
       if (inviteCode) {
-        const { data: invite, error: invErr } = await supabase
+        const { data: invite, error: invErr } = await sb
           .from('invites')
           .select('*')
           .eq('code', inviteCode)
@@ -1576,15 +1579,15 @@ async function handleAuth() {
         }
       }
 
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await sb.auth.signUp({ email, password });
       if (error) throw error;
 
       // Mark invite as used
       if (inviteCode) {
-        await supabase.from('invites').update({ used_by: data.user?.id, used_at: new Date().toISOString() }).eq('code', inviteCode);
+        await sb.from('invites').update({ used_by: data.user?.id, used_at: new Date().toISOString() }).eq('code', inviteCode);
       }
     } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
     }
   } catch (e) {
@@ -1596,7 +1599,7 @@ async function handleAuth() {
 }
 
 async function handleLogout() {
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   DataService.currentBabyId = null;
   DataService.currentUserId = null;
   DataService._cache = { records: [], settings: null, ratings: {} };
@@ -1622,7 +1625,7 @@ async function submitChangePassword() {
     return;
   }
   try {
-    const { error } = await supabase.auth.updateUser({ password: newPw });
+    const { error } = await sb.auth.updateUser({ password: newPw });
     if (error) throw error;
     errorEl.style.color = 'var(--green)';
     errorEl.textContent = t('passwordUpdated');
@@ -1646,10 +1649,10 @@ function showScreen(id) {
 }
 
 async function loadBabies() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await sb.auth.getUser();
   if (!user) return [];
 
-  const { data: babies, error } = await supabase
+  const { data: babies, error } = await sb
     .from('babies')
     .select('*')
     .eq('user_id', user.id)
@@ -1709,10 +1712,10 @@ async function addBaby() {
   const birthDate = document.getElementById('add-baby-birth').value;
   if (!name) { alert(t('fillAllFields')); return; }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await sb.auth.getUser();
   if (!user) return;
 
-  const { data: baby, error } = await supabase.from('babies').insert({
+  const { data: baby, error } = await sb.from('babies').insert({
     user_id: user.id,
     name: name,
     birth_date: birthDate || null,
@@ -2269,7 +2272,7 @@ function initApp() {
   document.getElementById('set-age').value = s.babyAgeMonths;
 
   // Set user avatar
-  supabase.auth.getUser().then(({ data: { user } }) => {
+  sb.auth.getUser().then(({ data: { user } }) => {
     if (user) {
       const initial = (user.email || 'U')[0].toUpperCase();
       document.getElementById('user-avatar').textContent = initial;
@@ -2281,7 +2284,7 @@ function initApp() {
   // Set baby name in settings
   const babyId = DataService.currentBabyId;
   if (babyId) {
-    supabase.from('babies').select('name,emoji').eq('id', babyId).single().then(({ data }) => {
+    sb.from('babies').select('name,emoji').eq('id', babyId).single().then(({ data }) => {
       if (data) {
         document.getElementById('settings-baby-name').textContent = (data.emoji || '') + ' ' + (data.name || 'Baby');
       }
@@ -2997,19 +3000,52 @@ function closeHelp() { document.getElementById('help-modal').classList.add('hidd
 // APP BOOT
 // ============================================
 async function boot() {
-  showScreen('loading-screen');
-  document.getElementById('loading-text').textContent = t('loading');
+  try {
+    showScreen('loading-screen');
+    document.getElementById('loading-text').textContent = t('loading');
 
-  // Listen for auth state changes
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) {
+    // Listen for auth state changes
+    sb.auth.onAuthStateChange(async (event, session) => {
+      try {
+        if (event === 'SIGNED_IN' && session) {
+          DataService.currentUserId = session.user.id;
+
+          const savedBabyId = localStorage.getItem('selectedBabyId');
+          if (savedBabyId) {
+            const { data: baby } = await sb.from('babies')
+              .select('id')
+              .eq('id', savedBabyId)
+              .single();
+            if (baby) {
+              await selectBaby(savedBabyId);
+              return;
+            }
+          }
+
+          showScreen('baby-select-screen');
+          await renderBabySelector();
+        } else if (event === 'SIGNED_OUT') {
+          showScreen('auth-screen');
+        }
+      } catch (e) {
+        console.error('Auth state change error:', e);
+        showScreen('auth-screen');
+      }
+    });
+
+    // Check for existing session
+    const { data: { session }, error: sessionError } = await sb.auth.getSession();
+    if (sessionError) {
+      console.error('getSession error:', sessionError);
+      showScreen('auth-screen');
+      return;
+    }
+
+    if (session) {
       DataService.currentUserId = session.user.id;
-
-      // Check for previously selected baby
       const savedBabyId = localStorage.getItem('selectedBabyId');
       if (savedBabyId) {
-        // Verify the baby still exists and user has access
-        const { data: baby } = await supabase.from('babies')
+        const { data: baby } = await sb.from('babies')
           .select('id')
           .eq('id', savedBabyId)
           .single();
@@ -3018,34 +3054,17 @@ async function boot() {
           return;
         }
       }
-
-      // No saved baby — show selector
       showScreen('baby-select-screen');
       await renderBabySelector();
-    } else if (event === 'SIGNED_OUT') {
+    } else {
       showScreen('auth-screen');
     }
-  });
-
-  // Check for existing session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    DataService.currentUserId = session.user.id;
-    const savedBabyId = localStorage.getItem('selectedBabyId');
-    if (savedBabyId) {
-      const { data: baby } = await supabase.from('babies')
-        .select('id')
-        .eq('id', savedBabyId)
-        .single();
-      if (baby) {
-        await selectBaby(savedBabyId);
-        return;
-      }
-    }
-    showScreen('baby-select-screen');
-    await renderBabySelector();
-  } else {
+  } catch (e) {
+    console.error('Boot error:', e);
+    // Show auth screen as fallback so user isn't stuck on loading
     showScreen('auth-screen');
+    const loadingText = document.getElementById('loading-text');
+    if (loadingText) loadingText.textContent = 'Error: ' + e.message;
   }
 }
 
