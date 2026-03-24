@@ -1189,12 +1189,12 @@ const DataService = {
         id: r.id,
         start: r.start_time,
         end: r.end_time,
-        type: r.sleep_type || 'nap',
+        type: r.type || 'nap',
       }));
 
       // Load settings
       const { data: settings, error: setErr } = await supabase
-        .from('baby_settings')
+        .from('settings')
         .select('*')
         .eq('baby_id', this.currentBabyId)
         .single();
@@ -1208,8 +1208,9 @@ const DataService = {
       } else {
         this._cache.settings = this._defaultSettings();
         // Create default settings row
-        await supabase.from('baby_settings').insert({
+        await supabase.from('settings').insert({
           baby_id: this.currentBabyId,
+          user_id: this.currentUserId,
           morning_wake: '07:30',
           bedtime: '19:00',
           baby_age_months: 7,
@@ -1218,7 +1219,7 @@ const DataService = {
 
       // Load ratings
       const { data: ratings, error: ratErr } = await supabase
-        .from('day_ratings')
+        .from('ratings')
         .select('*')
         .eq('baby_id', this.currentBabyId);
       if (ratErr) throw ratErr;
@@ -1262,7 +1263,7 @@ const DataService = {
         user_id: this.currentUserId,
         start_time: record.start,
         end_time: record.end,
-        sleep_type: record.type,
+        type: record.type,
       });
       if (error) throw error;
     } catch (e) {
@@ -1295,7 +1296,7 @@ const DataService = {
     if (!col) return;
 
     try {
-      const { error } = await supabase.from('baby_settings')
+      const { error } = await supabase.from('settings')
         .update({ [col]: value })
         .eq('baby_id', this.currentBabyId);
       if (error) throw error;
@@ -1310,8 +1311,9 @@ const DataService = {
     localStorage.setItem('cache_' + this.currentBabyId, JSON.stringify(this._cache));
 
     try {
-      const { error } = await supabase.from('day_ratings').upsert({
+      const { error } = await supabase.from('ratings').upsert({
         baby_id: this.currentBabyId,
+        user_id: this.currentUserId,
         date: date,
         score: score,
       }, { onConflict: 'baby_id,date' });
@@ -1347,7 +1349,7 @@ const DataService = {
             user_id: this.currentUserId,
             start_time: item.record.start,
             end_time: item.record.end,
-            sleep_type: item.record.type,
+            type: item.record.type,
           });
         } else if (item.action === 'delete_record') {
           await supabase.from('sleep_logs').delete().eq('id', item.id);
@@ -1355,10 +1357,10 @@ const DataService = {
           const colMap = { morningWake: 'morning_wake', bedtime: 'bedtime', babyAgeMonths: 'baby_age_months' };
           const col = colMap[item.key];
           if (col) {
-            await supabase.from('baby_settings').update({ [col]: item.value }).eq('baby_id', this.currentBabyId);
+            await supabase.from('settings').update({ [col]: item.value }).eq('baby_id', this.currentBabyId);
           }
         } else if (item.action === 'save_rating') {
-          await supabase.from('day_ratings').upsert({
+          await supabase.from('ratings').upsert({
             baby_id: this.currentBabyId,
             date: item.date,
             score: item.score,
@@ -1566,7 +1568,7 @@ async function handleAuth() {
           submitBtn.textContent = t('signUp');
           return;
         }
-        if (invite.used) {
+        if (invite.used_by) {
           errorEl.textContent = t('inviteUsed');
           submitBtn.disabled = false;
           submitBtn.textContent = t('signUp');
@@ -1579,7 +1581,7 @@ async function handleAuth() {
 
       // Mark invite as used
       if (inviteCode) {
-        await supabase.from('invites').update({ used: true, used_by: data.user?.id }).eq('code', inviteCode);
+        await supabase.from('invites').update({ used_by: data.user?.id, used_at: new Date().toISOString() }).eq('code', inviteCode);
       }
     } else {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -1650,39 +1652,11 @@ async function loadBabies() {
   const { data: babies, error } = await supabase
     .from('babies')
     .select('*')
-    .or('owner_id.eq.' + user.id + ',id.in.(select baby_id from baby_access where user_id = ' + user.id + ')');
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true });
 
-  // Simpler query - just get babies the user owns or has access to
-  const { data: ownBabies, error: err1 } = await supabase
-    .from('babies')
-    .select('*')
-    .eq('owner_id', user.id);
-
-  const { data: sharedAccess, error: err2 } = await supabase
-    .from('baby_access')
-    .select('baby_id')
-    .eq('user_id', user.id);
-
-  let allBabies = ownBabies || [];
-
-  if (sharedAccess && sharedAccess.length > 0) {
-    const sharedIds = sharedAccess.map(a => a.baby_id);
-    const { data: sharedBabies } = await supabase
-      .from('babies')
-      .select('*')
-      .in('id', sharedIds);
-    if (sharedBabies) {
-      allBabies = [...allBabies, ...sharedBabies];
-    }
-  }
-
-  // Deduplicate
-  const seen = new Set();
-  return allBabies.filter(b => {
-    if (seen.has(b.id)) return false;
-    seen.add(b.id);
-    return true;
-  });
+  if (error) { console.error('loadBabies error:', error); return []; }
+  return babies || [];
 }
 
 async function renderBabySelector() {
@@ -1739,7 +1713,7 @@ async function addBaby() {
   if (!user) return;
 
   const { data: baby, error } = await supabase.from('babies').insert({
-    owner_id: user.id,
+    user_id: user.id,
     name: name,
     birth_date: birthDate || null,
     emoji: selectedBabyEmoji,
