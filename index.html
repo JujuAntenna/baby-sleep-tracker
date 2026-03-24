@@ -1677,8 +1677,35 @@ async function handleAuth() {
     errorEl.textContent = e.message || 'Authentication failed';
     submitBtn.disabled = false;
     submitBtn.textContent = authMode === 'login' ? t('logIn') : t('signUp');
+    return;
   }
-  // Auth state change listener will handle navigation
+
+  // Auth succeeded — navigate to baby selector
+  submitBtn.disabled = false;
+  submitBtn.textContent = authMode === 'login' ? t('logIn') : t('signUp');
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    DataService.currentUserId = session.user.id;
+
+    // Check if user has a previously selected baby
+    const savedBabyId = localStorage.getItem('selectedBabyId');
+    if (savedBabyId) {
+      const { data: baby } = await sb.from('babies')
+        .select('id')
+        .eq('id', savedBabyId)
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      if (baby) {
+        await selectBaby(savedBabyId);
+        return;
+      }
+      localStorage.removeItem('selectedBabyId');
+    }
+
+    showScreen('baby-select-screen');
+    await renderBabySelector();
+  }
 }
 
 async function handleLogout() {
@@ -1864,12 +1891,19 @@ async function selectBaby(babyId) {
   showScreen('loading-screen');
   document.getElementById('loading-text').textContent = t('loading');
 
-  DataService.currentBabyId = babyId;
-  localStorage.setItem('selectedBabyId', babyId);
+  try {
+    DataService.currentBabyId = babyId;
+    localStorage.setItem('selectedBabyId', babyId);
 
-  await DataService.loadAll();
-  showScreen('app');
-  initApp();
+    await DataService.loadAll();
+    showScreen('app');
+    initApp();
+  } catch (e) {
+    console.error('selectBaby error:', e);
+    // Failed to load data — go to baby selector instead of stuck loading
+    showScreen('baby-select-screen');
+    await renderBabySelector();
+  }
 }
 
 function showBabySelector() {
@@ -3132,57 +3166,54 @@ async function boot() {
   try {
     showScreen('loading-screen');
     document.getElementById('loading-text').textContent = t('loading');
+    console.log('[boot] Starting...');
 
-    // Listen for auth state changes
-    sb.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (event === 'SIGNED_IN' && session) {
-          DataService.currentUserId = session.user.id;
-
-          const savedBabyId = localStorage.getItem('selectedBabyId');
-          if (savedBabyId) {
-            const { data: baby } = await sb.from('babies')
-              .select('id')
-              .eq('id', savedBabyId)
-              .single();
-            if (baby) {
-              await selectBaby(savedBabyId);
-              return;
-            }
-          }
-
-          showScreen('baby-select-screen');
-          await renderBabySelector();
-        } else if (event === 'SIGNED_OUT') {
-          showScreen('auth-screen');
-        }
-      } catch (e) {
-        console.error('Auth state change error:', e);
-        showScreen('auth-screen');
-      }
-    });
-
-    // Check for existing session
+    // Check for existing session first
     const { data: { session }, error: sessionError } = await sb.auth.getSession();
+    console.log('[boot] getSession result:', session ? 'has session' : 'no session', sessionError || '');
+
     if (sessionError) {
       console.error('getSession error:', sessionError);
       showScreen('auth-screen');
       return;
     }
 
+    // Set up auth state listener AFTER initial check (to avoid race)
+    sb.auth.onAuthStateChange(async (event, session) => {
+      console.log('[auth] State change:', event);
+      if (event === 'SIGNED_OUT') {
+        DataService.currentUserId = null;
+        DataService.currentBabyId = null;
+        localStorage.removeItem('selectedBabyId');
+        showScreen('auth-screen');
+      }
+    });
+
     if (session) {
       DataService.currentUserId = session.user.id;
+      console.log('[boot] User:', session.user.id);
+
       const savedBabyId = localStorage.getItem('selectedBabyId');
+      console.log('[boot] Saved baby:', savedBabyId);
+
       if (savedBabyId) {
-        const { data: baby } = await sb.from('babies')
+        // Verify baby still exists — use maybeSingle to avoid error on no match
+        const { data: baby, error: babyErr } = await sb.from('babies')
           .select('id')
           .eq('id', savedBabyId)
-          .single();
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+
+        console.log('[boot] Baby check:', baby ? 'found' : 'not found', babyErr || '');
+
         if (baby) {
           await selectBaby(savedBabyId);
           return;
         }
+        // Baby not found — clear stale selection
+        localStorage.removeItem('selectedBabyId');
       }
+
       showScreen('baby-select-screen');
       await renderBabySelector();
     } else {
@@ -3190,10 +3221,7 @@ async function boot() {
     }
   } catch (e) {
     console.error('Boot error:', e);
-    // Show auth screen as fallback so user isn't stuck on loading
     showScreen('auth-screen');
-    const loadingText = document.getElementById('loading-text');
-    if (loadingText) loadingText.textContent = 'Error: ' + e.message;
   }
 }
 
