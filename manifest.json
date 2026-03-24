@@ -10,14 +10,22 @@
   "categories": ["health", "lifestyle"],
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%237c8cbf'/%3E%3Ccircle cx='80' cy='96' r='40' fill='%23f0f0ff'/%3E%3Ccircle cx='95' cy='85' r='35' fill='%237c8cbf'/%3E%3Ccircle cx='130' cy='60' r='5' fill='%23f0f0ff'/%3E%3Ccircle cx='145' cy='80' r='3' fill='%23f0f0ff'/%3E%3Ccircle cx='120' cy='45' r='4' fill='%23f0f0ff'/%3E%3Ctext x='96' y='155' text-anchor='middle' font-size='28' fill='%23f0f0ff'%3E%F0%9F%92%A4%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%23f0f0ff'/%3E%3Cpath d='M120 50c-30 0-54 22-54 50s24 50 54 50c-8 0-16-2-23-5C75 136 58 112 58 84c0-4 .3-8 1-12C67 56 80 44 96 40c8-2 16 2 24 10z' fill='%237c8cbf' opacity='0.9'/%3E%3Ccircle cx='130' cy='52' r='4' fill='%237c8cbf' opacity='0.7'/%3E%3Ccircle cx='148' cy='68' r='3' fill='%237c8cbf' opacity='0.5'/%3E%3Ccircle cx='142' cy='44' r='2.5' fill='%237c8cbf' opacity='0.6'/%3E%3Ccircle cx='155' cy='55' r='2' fill='%237c8cbf' opacity='0.4'/%3E%3Ccircle cx='118' cy='38' r='3' fill='%237c8cbf' opacity='0.55'/%3E%3Cpath d='M128 56l2 5h5l-4 3 1.5 5-4.5-3-4.5 3 1.5-5-4-3h5z' fill='%237c8cbf' opacity='0.65'/%3E%3Cpath d='M152 78l1.5 4h4l-3 2.5 1 4-3.5-2.5-3.5 2.5 1-4-3-2.5h4z' fill='%237c8cbf' opacity='0.45'/%3E%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%237c8cbf'/%3E%3Ccircle cx='210' cy='256' r='110' fill='%23f0f0ff'/%3E%3Ccircle cx='250' cy='226' r='95' fill='%237c8cbf'/%3E%3Ccircle cx='350' cy='160' r='14' fill='%23f0f0ff'/%3E%3Ccircle cx='390' cy='210' r='8' fill='%23f0f0ff'/%3E%3Ccircle cx='320' cy='130' r='11' fill='%23f0f0ff'/%3E%3Ctext x='256' y='420' text-anchor='middle' font-size='72' fill='%23f0f0ff'%3E%F0%9F%92%A4%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23f0f0ff'/%3E%3Cpath d='M320 110c-80 0-144 59-144 133s64 133 144 133c-22 0-43-4-62-13C208 340 170 290 170 232c0-12 1-23 3-34 20-40 56-72 100-82 16-6 32-2 47 14z' fill='%237c8cbf' opacity='0.9'/%3E%3Ccircle cx='348' cy='120' r='10' fill='%237c8cbf' opacity='0.7'/%3E%3Ccircle cx='396' cy='162' r='8' fill='%237c8cbf' opacity='0.5'/%3E%3Ccircle cx='380' cy='100' r='7' fill='%237c8cbf' opacity='0.6'/%3E%3Ccircle cx='414' cy='130' r='5.5' fill='%237c8cbf' opacity='0.4'/%3E%3Ccircle cx='316' cy='88' r='8' fill='%237c8cbf' opacity='0.55'/%3E%3Cpath d='M344 130l5 14h14l-11 8 4 14-12-9-12 9 4-14-11-8h14z' fill='%237c8cbf' opacity='0.65'/%3E%3Cpath d='M406 190l4 11h11l-9 7 3 11-9-7-9 7 3-11-9-7h11z' fill='%237c8cbf' opacity='0.45'/%3E%3Cpath d='M362 80l3 8h8l-6 5 2 8-7-5-7 5 2-8-6-5h8z' fill='%237c8cbf' opacity='0.5'/%3E%3C/svg%3E",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%237c8cbf'/%3E%3Cpath d='M320 110c-80 0-144 59-144 133s64 133 144 133c-22 0-43-4-62-13C208 340 170 290 170 232c0-12 1-23 3-34 20-40 56-72 100-82 16-6 32-2 47 14z' fill='white' opacity='0.95'/%3E%3Ccircle cx='348' cy='120' r='10' fill='white' opacity='0.8'/%3E%3Ccircle cx='396' cy='162' r='8' fill='white' opacity='0.6'/%3E%3Ccircle cx='380' cy='100' r='7' fill='white' opacity='0.7'/%3E%3Ccircle cx='414' cy='130' r='5.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='316' cy='88' r='8' fill='white' opacity='0.65'/%3E%3Cpath d='M344 130l5 14h14l-11 8 4 14-12-9-12 9 4-14-11-8h14z' fill='white' opacity='0.75'/%3E%3Cpath d='M406 190l4 11h11l-9 7 3 11-9-7-9 7 3-11-9-7h11z' fill='white' opacity='0.55'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }
