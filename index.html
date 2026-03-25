@@ -2629,22 +2629,23 @@ function initApp() {
     if (ageAutoEl) ageAutoEl.classList.add('hidden');
   }
 
-  // Set user avatar
+  // Set user email in settings
   sb.auth.getUser().then(({ data: { user } }) => {
     if (user) {
-      const initial = (user.email || 'U')[0].toUpperCase();
-      document.getElementById('user-avatar').textContent = initial;
-      document.getElementById('settings-avatar').textContent = initial;
       document.getElementById('settings-email').textContent = user.email || '';
     }
   });
 
-  // Set baby name in settings
+  // Set baby name and avatar
   const babyId = DataService.currentBabyId;
   if (babyId) {
     sb.from('babies').select('name,emoji').eq('id', babyId).single().then(({ data }) => {
       if (data) {
         document.getElementById('settings-baby-name').textContent = (data.emoji || '') + ' ' + (data.name || 'Baby');
+        // Use baby emoji for header avatar, fallback to name initial
+        const avatar = data.emoji || (data.name || 'B')[0].toUpperCase();
+        document.getElementById('user-avatar').textContent = avatar;
+        document.getElementById('settings-avatar').textContent = avatar;
       }
     });
   }
