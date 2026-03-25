@@ -250,18 +250,29 @@ body {
 .add-past-btn:active { opacity: 0.7; }
 
 .time-adjust {
-  display: flex; align-items: center; justify-content: center; gap: 12px;
-  margin: 10px 0 4px; padding: 8px; background: var(--bg); border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  margin: 10px 0 4px; padding: 12px; background: var(--bg); border-radius: 12px;
 }
+.time-adjust-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.time-adjust input[type="time"] {
+  padding: 8px 12px; border: 2px solid var(--accent2); border-radius: 10px;
+  background: var(--card); color: var(--text); font-size: 1.1em; font-weight: 600;
+  text-align: center; min-width: 110px;
+}
+.time-adjust input[type="time"]:focus { border-color: var(--accent); outline: none; }
 .time-adjust button {
-  width: 36px; height: 36px; border-radius: 50%;
+  height: 34px; border-radius: 17px;
   border: 2px solid var(--accent2); background: var(--card); color: var(--text);
-  font-size: 1em; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 0.8em; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  padding: 0 10px; white-space: nowrap;
 }
+.time-adjust button:active { opacity: 0.7; }
 .time-adjust button.confirm-adj {
   background: var(--accent); color: white; border-color: var(--accent);
+  font-size: 1em; font-weight: 600; padding: 0 20px; height: 40px; border-radius: 20px; width: 100%;
 }
-.time-adjust span { font-size: 1.05em; font-weight: 600; min-width: 80px; text-align: center; }
 
 /* Today event cards */
 .today-events { display: flex; flex-direction: column; gap: 8px; }
@@ -580,10 +591,14 @@ body {
         <span id="toggle-text">Start Sleep</span>
       </button>
       <div class="time-adjust hidden" id="time-adjust">
-        <button onclick="adjustTime(-5)">-5</button>
-        <span id="adjust-time-display">--:--</span>
-        <button onclick="adjustTime(5)">+5</button>
-        <button class="confirm-adj" onclick="confirmAdjust()">✓</button>
+        <div class="time-adjust-row">
+          <button onclick="adjustTime(-5)">−5m</button>
+          <button onclick="adjustTime(-1)">−1m</button>
+          <input type="time" id="adjust-time-input" onchange="onTimeInputChange(this.value)">
+          <button onclick="adjustTime(1)">+1m</button>
+          <button onclick="adjustTime(5)">+5m</button>
+        </div>
+        <button class="confirm-adj" onclick="confirmAdjust()">✓ Confirm</button>
       </div>
       <button class="add-past-btn" onclick="showPastSleepModal()">
         <span>＋</span> Log a past sleep
@@ -2664,13 +2679,25 @@ function showTimeAdjust(recId, field, date) {
   adjustingField = field;
   adjustDate = new Date(date);
   document.getElementById('time-adjust').classList.remove('hidden');
-  document.getElementById('adjust-time-display').textContent = formatTime(adjustDate);
+  updateTimeInput();
+}
+
+function updateTimeInput() {
+  const h = String(adjustDate.getHours()).padStart(2, '0');
+  const m = String(adjustDate.getMinutes()).padStart(2, '0');
+  document.getElementById('adjust-time-input').value = h + ':' + m;
+}
+
+function onTimeInputChange(val) {
+  if (!val || !adjustDate) return;
+  const [h, m] = val.split(':').map(Number);
+  adjustDate.setHours(h, m, 0, 0);
 }
 
 function adjustTime(delta) {
   if (!adjustDate) return;
   adjustDate.setMinutes(adjustDate.getMinutes() + delta);
-  document.getElementById('adjust-time-display').textContent = formatTime(adjustDate);
+  updateTimeInput();
 }
 
 async function confirmAdjust() {
