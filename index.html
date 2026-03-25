@@ -353,16 +353,22 @@ body {
 /* Nap list */
 .nap-list { list-style: none; }
 .nap-item {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; gap: 2px;
   padding: 10px 0; border-bottom: 1px solid var(--bg2);
 }
 .nap-item:last-child { border-bottom: none; }
-.nap-item .nap-num { font-weight: 600; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
-.nap-item .nap-times { font-size: 0.9em; flex: 1; white-space: nowrap; }
-.nap-item .nap-dur { font-weight: 600; color: var(--sleep); white-space: nowrap; flex-shrink: 0; }
+.nap-item .nap-row1 {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nap-item .nap-num { font-weight: 600; color: var(--accent); }
+.nap-item .nap-dur { font-weight: 600; color: var(--sleep); font-size: 0.95em; }
+.nap-item .nap-row2 {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nap-item .nap-times { font-size: 0.85em; color: var(--text2); }
 .nap-item .nap-actions { flex-shrink: 0; }
 .nap-item .nap-actions button {
-  background: none; border: none; color: var(--text2); font-size: 1.1em; cursor: pointer; padding: 4px;
+  background: none; border: none; color: var(--text2); font-size: 1em; cursor: pointer; padding: 2px 4px;
 }
 
 /* Morning plan */
@@ -3308,13 +3314,17 @@ function renderHistDetail() {
     const isNight = r.type === 'night';
     const lbl = isNight ? t('nightSleep') : (t('nap') + ' ' + recs.filter((x,j) => j <= i && x.type !== 'night').length);
     return '<li class="nap-item">' +
-      '<span class="nap-num" style="' + (isNight ? 'color:#5b6999' : '') + '">' + (isNight ? '🌙' : '💤') + ' ' + lbl + '</span>' +
-      '<span class="nap-times">' + formatTime(start) + ' – ' + (end ? formatTime(end) : '...') + '</span>' +
-      '<span class="nap-dur">' + dur + '</span>' +
-      '<span class="nap-actions">' +
+      '<div class="nap-row1">' +
+        '<span class="nap-num" style="' + (isNight ? 'color:#5b6999' : '') + '">' + (isNight ? '🌙' : '💤') + ' ' + lbl + '</span>' +
+        '<span class="nap-dur">' + dur + '</span>' +
+      '</div>' +
+      '<div class="nap-row2">' +
+        '<span class="nap-times">' + formatTime(start) + ' – ' + (end ? formatTime(end) : '...') + '</span>' +
+        '<span class="nap-actions">' +
         '<button onclick="editRecord(\'' + r.id + '\')" title="' + t('editSleepTitle') + '">✏️</button>' +
         '<button onclick="deleteRecord(\'' + r.id + '\')" title="' + t('delete') + '">🗑</button>' +
       '</span>' +
+      '</div>' +
     '</li>';
   }).join('') + '</ul>';
 
