@@ -502,7 +502,7 @@ body {
     </div>
     <div class="form-group hidden" id="invite-group">
       <label id="auth-invite-label">Invite Code</label>
-      <input type="text" id="auth-invite" placeholder="Optional">
+      <input type="text" id="auth-invite" placeholder="Enter invite code" required>
     </div>
     <div class="auth-error" id="auth-error"></div>
     <button class="btn btn-primary" onclick="handleAuth()" id="auth-submit-btn">Log In</button>
@@ -950,6 +950,7 @@ const i18n = {
     switchBaby: 'Switch Baby',
     // Invite
     inviteCode: 'Invite Code',
+    inviteRequired: 'An invite code is required to sign up.',
     invalidInvite: 'Invalid invite code.',
     inviteUsed: 'This invite code has already been used.',
     // Status
@@ -1104,6 +1105,7 @@ const i18n = {
     switchBaby: '切换宝宝',
     // Invite
     inviteCode: '邀请码',
+    inviteRequired: '注册需要邀请码。',
     invalidInvite: '无效的邀请码。',
     inviteUsed: '此邀请码已被使用。',
     // Status
@@ -1640,35 +1642,39 @@ async function handleAuth() {
 
   try {
     if (authMode === 'signup') {
-      // Check invite code if provided
+      // Invite code is required for signup
       const inviteCode = document.getElementById('auth-invite').value.trim();
-      if (inviteCode) {
-        const { data: invite, error: invErr } = await sb
-          .from('invites')
-          .select('*')
-          .eq('code', inviteCode)
-          .single();
-        if (invErr || !invite) {
-          errorEl.textContent = t('invalidInvite');
-          submitBtn.disabled = false;
-          submitBtn.textContent = t('signUp');
-          return;
-        }
-        if (invite.used_by) {
-          errorEl.textContent = t('inviteUsed');
-          submitBtn.disabled = false;
-          submitBtn.textContent = t('signUp');
-          return;
-        }
+      if (!inviteCode) {
+        errorEl.textContent = t('inviteRequired');
+        submitBtn.disabled = false;
+        submitBtn.textContent = t('signUp');
+        return;
+      }
+
+      // Validate invite code exists and is unused
+      const { data: invite, error: invErr } = await sb
+        .from('invites')
+        .select('*')
+        .eq('code', inviteCode)
+        .single();
+      if (invErr || !invite) {
+        errorEl.textContent = t('invalidInvite');
+        submitBtn.disabled = false;
+        submitBtn.textContent = t('signUp');
+        return;
+      }
+      if (invite.used_by) {
+        errorEl.textContent = t('inviteUsed');
+        submitBtn.disabled = false;
+        submitBtn.textContent = t('signUp');
+        return;
       }
 
       const { data, error } = await sb.auth.signUp({ email, password });
       if (error) throw error;
 
-      // Mark invite as used
-      if (inviteCode) {
-        await sb.from('invites').update({ used_by: data.user?.id, used_at: new Date().toISOString() }).eq('code', inviteCode);
-      }
+      // Mark invite as used (single-use)
+      await sb.from('invites').update({ used_by: data.user?.id, used_at: new Date().toISOString() }).eq('code', inviteCode);
     } else {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
