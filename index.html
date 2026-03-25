@@ -250,29 +250,32 @@ body {
 .add-past-btn:active { opacity: 0.7; }
 
 .time-adjust {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  margin: 10px 0 4px; padding: 12px; background: var(--bg); border-radius: 12px;
-}
-.time-adjust-row {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin: 10px 0 4px; padding: 14px; background: var(--bg); border-radius: 12px;
 }
 .time-adjust input[type="time"] {
-  padding: 8px 12px; border: 2px solid var(--accent2); border-radius: 10px;
-  background: var(--card); color: var(--text); font-size: 1.1em; font-weight: 600;
-  text-align: center; min-width: 110px;
+  padding: 10px 16px; border: 2px solid var(--accent); border-radius: 12px;
+  background: var(--card); color: var(--text); font-size: 1.4em; font-weight: 700;
+  text-align: center; width: 160px;
 }
 .time-adjust input[type="time"]:focus { border-color: var(--accent); outline: none; }
-.time-adjust button {
-  height: 34px; border-radius: 17px;
+.time-adjust-row {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.time-adjust-row button {
+  height: 36px; border-radius: 18px;
   border: 2px solid var(--accent2); background: var(--card); color: var(--text);
-  font-size: 0.8em; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  padding: 0 10px; white-space: nowrap;
+  font-size: 0.85em; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 12px; white-space: nowrap;
 }
-.time-adjust button:active { opacity: 0.7; }
-.time-adjust button.confirm-adj {
-  background: var(--accent); color: white; border-color: var(--accent);
-  font-size: 1em; font-weight: 600; padding: 0 20px; height: 40px; border-radius: 20px; width: 100%;
+.time-adjust-row button:active { opacity: 0.7; }
+.time-adjust .confirm-adj {
+  background: var(--accent); color: white; border: none;
+  font-size: 1em; font-weight: 600; padding: 12px 20px;
+  border-radius: 50px; width: 100%; cursor: pointer;
 }
+.time-adjust .confirm-adj:active { opacity: 0.8; }
 
 /* Today event cards */
 .today-events { display: flex; flex-direction: column; gap: 8px; }
@@ -591,12 +594,14 @@ body {
         <span id="toggle-text">Start Sleep</span>
       </button>
       <div class="time-adjust hidden" id="time-adjust">
+        <input type="time" id="adjust-time-input" onchange="onTimeInputChange(this.value)">
         <div class="time-adjust-row">
-          <button onclick="adjustTime(-5)">−5m</button>
-          <button onclick="adjustTime(-1)">−1m</button>
-          <input type="time" id="adjust-time-input" onchange="onTimeInputChange(this.value)">
-          <button onclick="adjustTime(1)">+1m</button>
-          <button onclick="adjustTime(5)">+5m</button>
+          <button onclick="adjustTime(-15)">−15</button>
+          <button onclick="adjustTime(-5)">−5</button>
+          <button onclick="adjustTime(-1)">−1</button>
+          <button onclick="adjustTime(1)">+1</button>
+          <button onclick="adjustTime(5)">+5</button>
+          <button onclick="adjustTime(15)">+15</button>
         </div>
         <button class="confirm-adj" onclick="confirmAdjust()">✓ Confirm</button>
       </div>
