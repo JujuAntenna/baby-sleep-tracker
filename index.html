@@ -250,29 +250,22 @@ body {
 .add-past-btn:active { opacity: 0.7; }
 
 .time-adjust {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  margin: 10px 0 4px; padding: 14px; background: var(--bg); border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin: 10px 0 4px; padding: 16px; background: var(--bg); border-radius: 12px;
+}
+.time-adjust-label {
+  font-size: 0.8em; color: var(--text2); letter-spacing: 0.3px;
 }
 .time-adjust input[type="time"] {
-  padding: 10px 16px; border: 2px solid var(--accent); border-radius: 12px;
-  background: var(--card); color: var(--text); font-size: 1.4em; font-weight: 700;
-  text-align: center; width: 160px;
+  padding: 14px 20px; border: 2px solid var(--accent); border-radius: 14px;
+  background: var(--card); color: var(--text); font-size: 1.6em; font-weight: 700;
+  text-align: center; width: 180px;
+  box-shadow: 0 2px 8px rgba(124,140,191,0.15);
 }
 .time-adjust input[type="time"]:focus { border-color: var(--accent); outline: none; }
-.time-adjust-row {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-}
-.time-adjust-row button {
-  height: 36px; border-radius: 18px;
-  border: 2px solid var(--accent2); background: var(--card); color: var(--text);
-  font-size: 0.85em; font-weight: 500; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 12px; white-space: nowrap;
-}
-.time-adjust-row button:active { opacity: 0.7; }
 .time-adjust .confirm-adj {
   background: var(--accent); color: white; border: none;
-  font-size: 1em; font-weight: 600; padding: 12px 20px;
+  font-size: 1em; font-weight: 600; padding: 14px 20px;
   border-radius: 50px; width: 100%; cursor: pointer;
 }
 .time-adjust .confirm-adj:active { opacity: 0.8; }
@@ -594,15 +587,8 @@ body {
         <span id="toggle-text">Start Sleep</span>
       </button>
       <div class="time-adjust hidden" id="time-adjust">
+        <span class="time-adjust-label" id="time-adjust-label">⏰ Tap to adjust time</span>
         <input type="time" id="adjust-time-input" onchange="onTimeInputChange(this.value)">
-        <div class="time-adjust-row">
-          <button onclick="adjustTime(-15)">−15</button>
-          <button onclick="adjustTime(-5)">−5</button>
-          <button onclick="adjustTime(-1)">−1</button>
-          <button onclick="adjustTime(1)">+1</button>
-          <button onclick="adjustTime(5)">+5</button>
-          <button onclick="adjustTime(15)">+15</button>
-        </div>
         <button class="confirm-adj" onclick="confirmAdjust()">✓ Confirm</button>
       </div>
       <button class="add-past-btn" onclick="showPastSleepModal()">
@@ -971,6 +957,7 @@ const i18n = {
     // Invite
     inviteCode: 'Invite Code',
     inviteRequired: 'An invite code is required to sign up.',
+    tapToAdjust: '⏰ Tap to adjust time',
     invalidInvite: 'Invalid invite code.',
     inviteUsed: 'This invite code has already been used.',
     // Status
@@ -1126,6 +1113,7 @@ const i18n = {
     // Invite
     inviteCode: '邀请码',
     inviteRequired: '注册需要邀请码。',
+    tapToAdjust: '⏰ 点击调整时间',
     invalidInvite: '无效的邀请码。',
     inviteUsed: '此邀请码已被使用。',
     // Status
@@ -2684,6 +2672,7 @@ function showTimeAdjust(recId, field, date) {
   adjustingField = field;
   adjustDate = new Date(date);
   document.getElementById('time-adjust').classList.remove('hidden');
+  document.getElementById('time-adjust-label').textContent = t('tapToAdjust');
   updateTimeInput();
 }
 
@@ -2697,12 +2686,6 @@ function onTimeInputChange(val) {
   if (!val || !adjustDate) return;
   const [h, m] = val.split(':').map(Number);
   adjustDate.setHours(h, m, 0, 0);
-}
-
-function adjustTime(delta) {
-  if (!adjustDate) return;
-  adjustDate.setMinutes(adjustDate.getMinutes() + delta);
-  updateTimeInput();
 }
 
 async function confirmAdjust() {
