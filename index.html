@@ -353,14 +353,14 @@ body {
 /* Nap list */
 .nap-list { list-style: none; }
 .nap-item {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; align-items: center; gap: 8px;
   padding: 10px 0; border-bottom: 1px solid var(--bg2);
 }
 .nap-item:last-child { border-bottom: none; }
-.nap-item .nap-num { font-weight: 600; color: var(--accent); min-width: 60px; }
-.nap-item .nap-times { font-size: 0.9em; flex: 1; }
-.nap-item .nap-dur { font-weight: 600; color: var(--sleep); }
-.nap-item .nap-actions { margin-left: 8px; }
+.nap-item .nap-num { font-weight: 600; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+.nap-item .nap-times { font-size: 0.9em; flex: 1; white-space: nowrap; }
+.nap-item .nap-dur { font-weight: 600; color: var(--sleep); white-space: nowrap; flex-shrink: 0; }
+.nap-item .nap-actions { flex-shrink: 0; }
 .nap-item .nap-actions button {
   background: none; border: none; color: var(--text2); font-size: 1.1em; cursor: pointer; padding: 4px;
 }
