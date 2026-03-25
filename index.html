@@ -709,6 +709,10 @@ body {
     <div class="card">
       <h2 id="set-schedule-title">⏰ Schedule</h2>
       <div class="setting-row">
+        <label id="set-birth-label">Birth date</label>
+        <input type="date" id="set-birth" onchange="handleUpdateBirthDate(this.value)">
+      </div>
+      <div class="setting-row">
         <label id="set-wake-label">Morning wake time</label>
         <input type="time" id="set-wake" value="07:30" onchange="handleSaveSetting('morningWake',this.value)">
       </div>
@@ -1196,6 +1200,7 @@ function updateStaticText() {
   // Settings
   setText('set-account-title', 'account');
   setText('set-schedule-title', 'schedule');
+  setText('set-birth-label', 'birthDate');
   setText('set-wake-label', 'morningWakeTime');
   setText('set-bed-label', 'targetBedtime');
   setText('set-age-label', 'babyAge');
@@ -1651,6 +1656,35 @@ function getNightForDate(dateStr) {
 async function handleSaveSetting(key, val) {
   await DataService.saveSetting(key, val);
   refreshAll();
+}
+
+async function handleUpdateBirthDate(dateStr) {
+  const babyId = DataService.currentBabyId;
+  if (!babyId) return;
+  try {
+    const { error } = await sb.from('babies')
+      .update({ birth_date: dateStr || null })
+      .eq('id', babyId);
+    if (error) throw error;
+    DataService._birthDate = dateStr || null;
+    if (dateStr) {
+      const ageMonths = Math.max(1, Math.floor((Date.now() - new Date(dateStr).getTime()) / (30.44 * 24 * 60 * 60 * 1000)));
+      await DataService.saveSetting('babyAgeMonths', ageMonths);
+      document.getElementById('set-age').value = ageMonths;
+      document.getElementById('set-age').readOnly = true;
+      document.getElementById('set-age').style.opacity = '0.6';
+      const noteEl = document.getElementById('age-auto-note');
+      noteEl.textContent = t('ageAutoCalculated') + ' — ' + ageMonths + ' ' + t('ageMonthsDisplay');
+      noteEl.classList.remove('hidden');
+    } else {
+      document.getElementById('set-age').readOnly = false;
+      document.getElementById('set-age').style.opacity = '1';
+      document.getElementById('age-auto-note').classList.add('hidden');
+    }
+    refreshAll();
+  } catch (e) {
+    console.error('handleUpdateBirthDate error:', e);
+  }
 }
 
 
@@ -2610,6 +2644,7 @@ function initApp() {
   document.getElementById('quick-wake-time').value = s.morningWake;
   document.getElementById('set-bed').value = s.bedtime;
   document.getElementById('set-age').value = s.babyAgeMonths;
+  document.getElementById('set-birth').value = DataService._birthDate || '';
 
   // Handle auto-calculated age from birth date
   const ageInput = document.getElementById('set-age');
