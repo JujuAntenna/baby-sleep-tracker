@@ -720,6 +720,7 @@ body {
         <label id="set-age-label">Baby age (months)</label>
         <input type="number" id="set-age" value="7" min="1" max="36" onchange="handleSaveSetting('babyAgeMonths',parseInt(this.value))">
       </div>
+      <div id="age-auto-note" class="hidden" style="font-size:0.82em;color:var(--text2);margin-top:-4px;padding:0 2px;"></div>
     </div>
   </div>
 
@@ -855,6 +856,11 @@ const i18n = {
     todaysPlan: "📅 Today's Plan",
     twonNapDay: '2-Nap Day',
     threeNapDay: '3-Nap Day',
+    oneNapDay: '1-Nap Day',
+    fourNapDay: '4-Nap Day',
+    trendingOneNap: 'Trending toward 1 nap — {pct}% of recent days were 1-nap days.',
+    ageAutoCalculated: 'Age auto-calculated from birth date',
+    ageMonthsDisplay: '{months} months old',
     rateToday: 'Rate Today',
     dashboard: 'Dashboard',
     history: 'History',
@@ -1011,6 +1017,11 @@ const i18n = {
     todaysPlan: '📅 今日计划',
     twonNapDay: '2次小睡',
     threeNapDay: '3次小睡',
+    oneNapDay: '1次小睡',
+    fourNapDay: '4次小睡',
+    trendingOneNap: '趋向1次小睡 — 近期{pct}%的天数为1次小睡。',
+    ageAutoCalculated: '年龄根据出生日期自动计算',
+    ageMonthsDisplay: '{months}个月大',
     rateToday: '今日评价',
     dashboard: '主页',
     history: '历史',
@@ -1476,13 +1487,20 @@ const DataService = {
 // ============================================
 function getAgeDefaults(months) {
   const profiles = {
-    5:  { nap2: [2.0, 2.25, 3.0],  nap3: [1.75, 2.0, 2.0, 2.25] },
-    6:  { nap2: [2.25, 2.75, 3.25], nap3: [2.0, 2.25, 2.25, 2.5] },
-    7:  { nap2: [2.5, 3.0, 3.5],   nap3: [2.25, 2.5, 2.5, 2.75] },
-    8:  { nap2: [2.75, 3.25, 3.75], nap3: [2.5, 2.75, 2.75, 3.0] },
-    9:  { nap2: [3.0, 3.5, 4.0],   nap3: [2.75, 3.0, 3.0, 3.25] },
-    10: { nap2: [3.25, 3.75, 4.0], nap3: [3.0, 3.0, 3.0, 3.25] },
-    12: { nap2: [3.5, 4.0, 4.5],  nap3: [3.0, 3.25, 3.25, 3.5] },
+    3:  { nap4: [1.25, 1.5, 1.5, 1.5, 1.75], nap3: [1.5, 1.75, 1.75, 2.0],  nap2: [1.75, 2.0, 2.5],  nap1: null },
+    4:  { nap4: [1.5, 1.75, 1.75, 1.75, 2.0], nap3: [1.75, 2.0, 2.0, 2.25], nap2: [2.0, 2.25, 2.75], nap1: null },
+    5:  { nap4: null, nap3: [1.75, 2.0, 2.0, 2.25],  nap2: [2.0, 2.25, 3.0],  nap1: null },
+    6:  { nap4: null, nap3: [2.0, 2.25, 2.25, 2.5],  nap2: [2.25, 2.75, 3.25], nap1: null },
+    7:  { nap4: null, nap3: [2.25, 2.5, 2.5, 2.75],  nap2: [2.5, 3.0, 3.5],   nap1: null },
+    8:  { nap4: null, nap3: [2.5, 2.75, 2.75, 3.0],  nap2: [2.75, 3.25, 3.75], nap1: null },
+    9:  { nap4: null, nap3: [2.75, 3.0, 3.0, 3.25],  nap2: [3.0, 3.5, 4.0],   nap1: null },
+    10: { nap4: null, nap3: [3.0, 3.0, 3.0, 3.25],   nap2: [3.25, 3.75, 4.0],  nap1: null },
+    12: { nap4: null, nap3: [3.0, 3.25, 3.25, 3.5],  nap2: [3.5, 4.0, 4.5],   nap1: null },
+    13: { nap4: null, nap3: null, nap2: [3.25, 3.5, 4.0],  nap1: [5.0, 5.5] },
+    15: { nap4: null, nap3: null, nap2: [3.5, 3.75, 4.25], nap1: [5.0, 5.5] },
+    18: { nap4: null, nap3: null, nap2: null, nap1: [5.0, 5.5] },
+    24: { nap4: null, nap3: null, nap2: null, nap1: [5.5, 6.0] },
+    36: { nap4: null, nap3: null, nap2: null, nap1: [6.0, 6.5] },
   };
   const ages = Object.keys(profiles).map(Number).sort((a,b) => a - b);
   let lo = ages[0], hi = ages[ages.length - 1];
@@ -1492,11 +1510,37 @@ function getAgeDefaults(months) {
   if (months <= ages[0]) return profiles[ages[0]];
   if (months >= ages[ages.length-1]) return profiles[ages[ages.length-1]];
   const frac = (months - lo) / (hi - lo);
-  const lerp = (a, b) => a.map((v, i) => v + frac * ((b[i]||v) - v));
-  return {
-    nap2: lerp(profiles[lo].nap2, profiles[hi].nap2),
-    nap3: lerp(profiles[lo].nap3, profiles[hi].nap3),
+  const lerpArr = (a, b) => {
+    if (!a && !b) return null;
+    if (!a) return b;
+    if (!b) return a;
+    return a.map((v, i) => v + frac * ((b[i]||v) - v));
   };
+  return {
+    nap4: lerpArr(profiles[lo].nap4, profiles[hi].nap4),
+    nap3: lerpArr(profiles[lo].nap3, profiles[hi].nap3),
+    nap2: lerpArr(profiles[lo].nap2, profiles[hi].nap2),
+    nap1: lerpArr(profiles[lo].nap1, profiles[hi].nap1),
+  };
+}
+
+
+// Blend historical wake window with age default
+// Returns blended value in minutes. histVal in minutes, ageDefaultHours in hours.
+function blendWW(histVal, histCount, ageDefaultHours) {
+  if (ageDefaultHours == null) {
+    return histVal; // no age default available
+  }
+  const ageMinutes = ageDefaultHours * 60;
+  if (histVal == null || histCount === 0) {
+    return ageMinutes; // 100% age default
+  }
+  if (histCount < 3) {
+    // Sparse history: lean on age defaults more
+    return 0.4 * histVal + 0.6 * ageMinutes;
+  }
+  // Normal: history-weighted blend
+  return 0.7 * histVal + 0.3 * ageMinutes;
 }
 
 
@@ -1726,6 +1770,7 @@ async function handleLogout() {
   await sb.auth.signOut();
   DataService.currentBabyId = null;
   DataService.currentUserId = null;
+  DataService._birthDate = null;
   DataService._cache = { records: [], settings: null, ratings: {} };
   localStorage.removeItem('selectedBabyId');
   showScreen('auth-screen');
@@ -1910,6 +1955,24 @@ async function selectBaby(babyId) {
     localStorage.setItem('selectedBabyId', babyId);
 
     await DataService.loadAll();
+
+    // Auto-calculate age from birth_date
+    try {
+      const { data: baby } = await sb.from('babies').select('birth_date').eq('id', babyId).single();
+      if (baby && baby.birth_date) {
+        const ageMonths = Math.max(1, Math.floor((Date.now() - new Date(baby.birth_date).getTime()) / (30.44 * 24 * 60 * 60 * 1000)));
+        DataService._cache.settings.babyAgeMonths = ageMonths;
+        DataService._birthDate = baby.birth_date;
+        // Also persist to settings table
+        await sb.from('settings').update({ baby_age_months: ageMonths }).eq('baby_id', babyId);
+      } else {
+        DataService._birthDate = null;
+      }
+    } catch (e2) {
+      console.error('Age auto-calc error:', e2);
+      DataService._birthDate = null;
+    }
+
     showScreen('app');
     initApp();
   } catch (e) {
@@ -1955,14 +2018,15 @@ function mergeMicroNaps(naps) {
 // History collection
 function collectHistory(days) {
   const hist = {
-    ww2nap: {}, ww3nap: {},
+    ww1nap: {}, ww2nap: {}, ww3nap: {}, ww4nap: {},
     napDur: {},
-    lastWW2: [], lastWW3: [],
-    bed2: [], bed3: [],
+    lastWW1: [], lastWW2: [], lastWW3: [], lastWW4: [],
+    bed1: [], bed2: [], bed3: [], bed4: [],
     nightDurs: [],
     totalDailySleep: [],
     napTotals: [],
     morningWakes: [],
+    napCountDays: { 1: 0, 2: 0, 3: 0, 4: 0 },
   };
   const now = new Date();
   for (let d = 1; d <= days; d++) {
@@ -1984,8 +2048,11 @@ function collectHistory(days) {
     const mergedNaps = mergeMicroNaps(naps);
     if (mergedNaps.length === 0) continue;
 
-    const is2nap = mergedNaps.length <= 2;
-    const wwSet = is2nap ? hist.ww2nap : hist.ww3nap;
+    const napCount = mergedNaps.length;
+    const wwSetKey = napCount === 1 ? 'ww1nap' : napCount === 2 ? 'ww2nap' : napCount >= 4 ? 'ww4nap' : 'ww3nap';
+    const wwSet = hist[wwSetKey];
+    if (hist.napCountDays[napCount] !== undefined) hist.napCountDays[napCount]++;
+    else if (napCount >= 4) hist.napCountDays[4] = (hist.napCountDays[4] || 0) + 1;
 
     let lastEnd = morningWakeMins || parseTime(getSettings().morningWake);
     mergedNaps.forEach((n, i) => {
@@ -2008,7 +2075,9 @@ function collectHistory(days) {
         const bed = dateToMins(new Date(nightStart.start));
         const lww = bed - lastEnd;
         if (lww > 0) {
-          if (is2nap) { hist.lastWW2.push({v: lww, d}); hist.bed2.push({v: bed, d}); }
+          if (napCount === 1) { hist.lastWW1.push({v: lww, d}); hist.bed1.push({v: bed, d}); }
+          else if (napCount === 2) { hist.lastWW2.push({v: lww, d}); hist.bed2.push({v: bed, d}); }
+          else if (napCount >= 4) { hist.lastWW4.push({v: lww, d}); hist.bed4.push({v: bed, d}); }
           else { hist.lastWW3.push({v: lww, d}); hist.bed3.push({v: bed, d}); }
         }
         if (nightStart.end) {
@@ -2093,12 +2162,15 @@ function computePrediction() {
 
   const isMorning = completedNaps.length === 0 && !sleeping;
 
-  const avgLastWW2 = weightedAvg(hist.lastWW2) || 210;
-  const avgLastWW3 = weightedAvg(hist.lastWW3) || 165;
+  const avgLastWW1 = weightedAvg(hist.lastWW1) || (defaults.nap1 ? defaults.nap1[defaults.nap1.length - 1] * 60 : 300);
+  const avgLastWW2 = weightedAvg(hist.lastWW2) || (defaults.nap2 ? defaults.nap2[defaults.nap2.length - 1] * 60 : 210);
+  const avgLastWW3 = weightedAvg(hist.lastWW3) || (defaults.nap3 ? defaults.nap3[defaults.nap3.length - 1] * 60 : 165);
+  const avgLastWW4 = weightedAvg(hist.lastWW4) || (defaults.nap4 ? defaults.nap4[defaults.nap4.length - 1] * 60 : 120);
 
   function shouldPredictBedtime() {
     if (sleeping) return false;
     if (completedNaps.length === 0) return false;
+    if (completedNaps.length >= 4) return true; // 4+ naps always go to bedtime
     if (completedNaps.length >= 3) {
       const timeUntilBed = bounds.bedMins - lastWakeMins;
       const neededFor4th = 120 + 20 + avgLastWW3;
@@ -2109,6 +2181,10 @@ function computePrediction() {
       const timeUntilBed = bounds.bedMins - nowMins;
       const minNeeded = 90 + 20 + avgLastWW3;
       if (timeUntilBed < minNeeded) return true;
+    }
+    if (completedNaps.length === 1 && defaults.nap1 && !defaults.nap2) {
+      // For babies >18mo who are firmly on 1-nap schedule, predict bedtime after 1 nap
+      return true;
     }
     return false;
   }
@@ -2153,11 +2229,14 @@ function computePrediction() {
 
   // BEDTIME MODE
   if (shouldPredictBedtime()) {
-    const is2day = completedNaps.length <= 2;
-    const lwwHist = is2day ? hist.lastWW2 : hist.lastWW3;
-    const bedHist = is2day ? hist.bed2 : hist.bed3;
-    const avgLWW = weightedAvg(lwwHist) || (is2day ? avgLastWW2 : avgLastWW3);
-    const avgBed = weightedAvg(bedHist) || weightedAvg([...hist.bed2, ...hist.bed3]) || bounds.bedMins;
+    const is1day = completedNaps.length === 1;
+    const is2day = !is1day && completedNaps.length <= 2;
+    let lwwHist, bedHist, fallbackLWW;
+    if (is1day) { lwwHist = hist.lastWW1; bedHist = hist.bed1; fallbackLWW = avgLastWW1; }
+    else if (is2day) { lwwHist = hist.lastWW2; bedHist = hist.bed2; fallbackLWW = avgLastWW2; }
+    else { lwwHist = hist.lastWW3; bedHist = hist.bed3; fallbackLWW = avgLastWW3; }
+    const avgLWW = weightedAvg(lwwHist) || fallbackLWW;
+    const avgBed = weightedAvg(bedHist) || weightedAvg([...hist.bed1, ...hist.bed2, ...hist.bed3]) || bounds.bedMins;
 
     let bedPred = lastWakeMins + avgLWW;
     if (bedHist && bedHist.length >= 2) {
@@ -2204,24 +2283,56 @@ function computePrediction() {
     };
   }
 
-  // Determine 2-nap vs 3-nap blend
+  // Determine nap-count blend across all patterns
+  const total1entries = Object.values(hist.ww1nap).flat().length;
   const total2entries = Object.values(hist.ww2nap).flat().length;
   const total3entries = Object.values(hist.ww3nap).flat().length;
-  const pct2 = total2entries / Math.max(1, total2entries + total3entries);
+  const total4entries = Object.values(hist.ww4nap).flat().length;
+  const totalEntries = Math.max(1, total1entries + total2entries + total3entries + total4entries);
+  const pct1 = total1entries / totalEntries;
+  const pct2 = total2entries / totalEntries;
+  const pct3 = total3entries / totalEntries;
+  const pct4 = total4entries / totalEntries;
 
-  // Wake window prediction
+  // Wake window prediction — blend all available nap-count patterns
+  const ww1 = weightedAvg(hist.ww1nap[nextNapPos] || []);
   const ww2 = weightedAvg(hist.ww2nap[nextNapPos] || []);
   const ww3 = weightedAvg(hist.ww3nap[nextNapPos] || []);
+  const ww4 = weightedAvg(hist.ww4nap[nextNapPos] || []);
+  const wwCount1 = (hist.ww1nap[nextNapPos] || []).length;
+  const wwCount2 = (hist.ww2nap[nextNapPos] || []).length;
+  const wwCount3 = (hist.ww3nap[nextNapPos] || []).length;
+  const wwCount4 = (hist.ww4nap[nextNapPos] || []).length;
+  const totalWWCount = wwCount1 + wwCount2 + wwCount3 + wwCount4;
+
+  // Get applicable age default for this nap position
+  function getAgeDefaultForPos(pos) {
+    // Try each nap pattern from most naps to fewest
+    if (defaults.nap4 && pos <= defaults.nap4.length) return defaults.nap4[pos - 1];
+    if (defaults.nap3 && pos <= defaults.nap3.length) return defaults.nap3[pos - 1];
+    if (defaults.nap2 && pos <= defaults.nap2.length) return defaults.nap2[pos - 1];
+    if (defaults.nap1 && pos <= defaults.nap1.length) return defaults.nap1[pos - 1];
+    return null;
+  }
+  const ageDefaultForPos = getAgeDefaultForPos(nextNapPos);
+
   let baseWW;
-  if (ww2 !== null && ww3 !== null) {
-    baseWW = pct2 * ww2 + (1 - pct2) * ww3;
-  } else if (ww2 !== null) {
-    baseWW = ww2;
-  } else if (ww3 !== null) {
-    baseWW = ww3;
+  // Blend across nap-count patterns weighted by frequency
+  const histVals = [];
+  const histWeights = [];
+  if (ww1 !== null) { histVals.push(ww1); histWeights.push(pct1); }
+  if (ww2 !== null) { histVals.push(ww2); histWeights.push(pct2); }
+  if (ww3 !== null) { histVals.push(ww3); histWeights.push(pct3); }
+  if (ww4 !== null) { histVals.push(ww4); histWeights.push(pct4); }
+  
+  if (histVals.length > 0) {
+    const wTotal = histWeights.reduce((a, b) => a + b, 0);
+    const rawHistWW = histVals.reduce((s, v, i) => s + v * histWeights[i], 0) / wTotal;
+    // Blend with age default
+    baseWW = blendWW(rawHistWW, totalWWCount, ageDefaultForPos);
   } else {
-    const def = defaults.nap3[nextNapPos - 1] || defaults.nap2[nextNapPos - 1] || 2.5;
-    baseWW = def * 60;
+    // No history — use 100% age default
+    baseWW = blendWW(null, 0, ageDefaultForPos) || 150;
   }
 
   let napAdj = 1.0;
@@ -2243,7 +2354,7 @@ function computePrediction() {
 
   let prediction = lastWakeMins + baseWW * napAdj + debtAdj;
 
-  const allWWs = [...(hist.ww2nap[nextNapPos] || []), ...(hist.ww3nap[nextNapPos] || [])];
+  const allWWs = [...(hist.ww1nap[nextNapPos] || []), ...(hist.ww2nap[nextNapPos] || []), ...(hist.ww3nap[nextNapPos] || []), ...(hist.ww4nap[nextNapPos] || [])];
   const stddev = arrStdev(allWWs);
   const earliest = prediction - Math.min(stddev * 0.8, 25);
   const latest = prediction + Math.min(stddev * 0.8, 25);
@@ -2251,13 +2362,18 @@ function computePrediction() {
   // Transition detection
   let transitionNote = null;
   const twoNapPct = Math.round(pct2 * 100);
-  if (twoNapPct >= 60) transitionNote = t('trendingTwoNaps', { pct: twoNapPct });
-  else if (twoNapPct <= 25 && total2entries + total3entries >= 5) transitionNote = t('solidThreeNaps', { pct: twoNapPct });
+  const oneNapPct = Math.round(pct1 * 100);
+  if (oneNapPct >= 40) transitionNote = t('trendingOneNap', { pct: oneNapPct });
+  else if (twoNapPct >= 60) transitionNote = t('trendingTwoNaps', { pct: twoNapPct });
+  else if (twoNapPct <= 25 && totalEntries >= 5) transitionNote = t('solidThreeNaps', { pct: twoNapPct });
+
+  // Determine dominant nap pattern for schedule pressure and decisions
+  const dominantLastWW = pct1 >= 0.4 ? avgLastWW1 : pct2 >= 0.4 ? avgLastWW2 : avgLastWW3;
 
   // Schedule pressure
   const timeUntilBed = bounds.bedMins - nowMins;
   const remainingNapEstimate = Math.max(0, (completedNaps.length < 2) ? 1 : 0);
-  const estRemainingTime = remainingNapEstimate * (baseWW + 50) + avgLastWW3;
+  const estRemainingTime = remainingNapEstimate * (baseWW + 50) + dominantLastWW;
   const pressure = timeUntilBed - estRemainingTime;
   let pressureLevel;
   if (pressure > 30) pressureLevel = 'green';
@@ -2266,9 +2382,9 @@ function computePrediction() {
 
   // Nap decision
   let napDecision = null;
-  if (completedNaps.length >= 2) {
+  if (completedNaps.length >= 1) {
     const minNapDur = 20;
-    const neededForOneMore = baseWW + minNapDur + avgLastWW3;
+    const neededForOneMore = baseWW + minNapDur + dominantLastWW;
     const canFit = timeUntilBed >= neededForOneMore;
 
     const todayNapTotal = completedNaps.reduce((s, r) => s + (new Date(r.end) - new Date(r.start)) / 60000, 0);
@@ -2276,17 +2392,22 @@ function computePrediction() {
     const deficit = avgDailyNap - todayNapTotal;
     const lastNapShort = prevNapDur !== null && prevNapDur < 35;
 
-    let score = 0;
-    if (canFit) score += 2;
-    if (deficit > 25) score += 2;
-    if (lastNapShort) score += 1;
-    if (pct2 < 0.4) score += 1;
-    if (timeUntilBed < neededForOneMore + 30) score -= 1;
+    // Only show nap decision for babies that might be transitioning down
+    const showDecision = completedNaps.length >= 2 || (completedNaps.length === 1 && pct1 >= 0.2);
+    
+    if (showDecision) {
+      let score = 0;
+      if (canFit) score += 2;
+      if (deficit > 25) score += 2;
+      if (lastNapShort) score += 1;
+      if (pct2 < 0.4 && completedNaps.length >= 2) score += 1;
+      if (pct1 >= 0.4 && completedNaps.length === 1) score -= 1;
+      if (timeUntilBed < neededForOneMore + 30) score -= 1;
 
-    const takeNap = score >= 3;
-    const skipBedtime = lastWakeMins + avgLastWW2;
-    const avgNapDur = weightedAvg(hist.napDur[nextNapPos] || []) || 30;
-    const napBedtime = prediction + avgNapDur + avgLastWW3;
+      const takeNap = score >= 3;
+      const skipBedtime = lastWakeMins + (completedNaps.length <= 1 ? avgLastWW1 : avgLastWW2);
+      const avgNapDur = weightedAvg(hist.napDur[nextNapPos] || []) || 30;
+      const napBedtime = prediction + avgNapDur + dominantLastWW;
 
     if (canFit && score >= 2 && score <= 4) {
       napDecision = {
@@ -2307,14 +2428,18 @@ function computePrediction() {
     } else if (!canFit) {
       napDecision = { ambiguous: false, action: 'skip', bedtime: Math.min(skipBedtime, bounds.bedMins + 30) };
     }
+    }
   }
 
   // Bedtime prediction
   let bedtimePred = null;
-  if (completedNaps.length >= 2) {
-    const is2day = napDecision && (napDecision.action === 'skip' || napDecision.recommended === 'skip');
-    const lwwHist = is2day ? hist.lastWW2 : hist.lastWW3;
-    const bedHist = is2day ? hist.bed2 : hist.bed3;
+  if (completedNaps.length >= 1) {
+    const is1day = completedNaps.length === 1 && (pct1 >= 0.4 || (napDecision && (napDecision.action === 'skip' || napDecision.recommended === 'skip')));
+    const is2day = !is1day && (completedNaps.length <= 2) && (napDecision && (napDecision.action === 'skip' || napDecision.recommended === 'skip'));
+    let lwwHist, bedHist;
+    if (is1day) { lwwHist = hist.lastWW1; bedHist = hist.bed1; }
+    else if (is2day) { lwwHist = hist.lastWW2; bedHist = hist.bed2; }
+    else { lwwHist = hist.lastWW3; bedHist = hist.bed3; }
     const avgLWW = weightedAvg(lwwHist);
     const avgBed = weightedAvg(bedHist);
     if (avgLWW !== null) {
@@ -2350,7 +2475,7 @@ function computePrediction() {
   // Morning plan
   let morningPlan = null;
   if (isMorning || completedNaps.length === 0) {
-    morningPlan = buildMorningPlan(bounds, defaults, { twoNapPct }, hist, morningWakeMins);
+    morningPlan = buildMorningPlan(bounds, defaults, { twoNapPct, oneNapPct, fourNapPct: Math.round(pct4 * 100) }, hist, morningWakeMins, s.babyAgeMonths);
   }
 
   return {
@@ -2393,35 +2518,73 @@ function buildNapReason(isForTaking, deficit, shortNap, canFit, transition) {
   return parts.join('. ') + '.';
 }
 
-function buildMorningPlan(bounds, defaults, transition, hist, actualWake) {
+function buildMorningPlan(bounds, defaults, transition, hist, actualWake, ageMonths) {
   const wake = actualWake || bounds.wakeMins;
+  const result = { twoNapPct: transition.twoNapPct, oneNapPct: transition.oneNapPct || 0 };
 
-  const ww2_1 = weightedAvg(hist.ww2nap[1] || []) || defaults.nap2[0] * 60;
-  const ww2_2 = weightedAvg(hist.ww2nap[2] || []) || defaults.nap2[1] * 60;
-  const dur2_1 = weightedAvg(hist.napDur[1] || []) || 50;
-  const dur2_2 = weightedAvg(hist.napDur[2] || []) || 80;
-  const plan2 = [
-    { start: wake + ww2_1, end: wake + ww2_1 + dur2_1, label: t('nap') + ' 1' },
-    { start: wake + ww2_1 + dur2_1 + ww2_2, end: wake + ww2_1 + dur2_1 + ww2_2 + dur2_2, label: t('nap') + ' 2' },
-    { start: weightedAvg(hist.bed2) || bounds.bedMins, end: 0, label: t('bedtime') },
-  ];
+  // 1-nap plan
+  if (defaults.nap1) {
+    const ww1_1raw = weightedAvg(hist.ww1nap[1] || []);
+    const ww1_1 = blendWW(ww1_1raw, (hist.ww1nap[1] || []).length, defaults.nap1[0]);
+    const dur1_1 = weightedAvg(hist.napDur[1] || []) || 90;
+    result.plan1 = [
+      { start: wake + ww1_1, end: wake + ww1_1 + dur1_1, label: t('nap') + ' 1' },
+      { start: weightedAvg(hist.bed1) || bounds.bedMins, end: 0, label: t('bedtime') },
+    ];
+  }
 
-  const ww3_1 = weightedAvg(hist.ww3nap[1] || []) || defaults.nap3[0] * 60;
-  const ww3_2 = weightedAvg(hist.ww3nap[2] || []) || defaults.nap3[1] * 60;
-  const ww3_3 = weightedAvg(hist.ww3nap[3] || []) || defaults.nap3[2] * 60;
-  const dur3_1 = weightedAvg(hist.napDur[1] || []) || 40;
-  const dur3_2 = weightedAvg(hist.napDur[2] || []) || 70;
-  const dur3_3 = weightedAvg(hist.napDur[3] || []) || 30;
-  let t3 = wake;
-  const plan3 = [];
-  [ww3_1, ww3_2, ww3_3].forEach((ww, i) => {
-    const dur = [dur3_1, dur3_2, dur3_3][i];
-    plan3.push({ start: t3 + ww, end: t3 + ww + dur, label: t('nap') + ' ' + (i + 1) });
-    t3 = t3 + ww + dur;
-  });
-  plan3.push({ start: weightedAvg(hist.bed3) || bounds.bedMins, end: 0, label: t('bedtime') });
+  // 2-nap plan
+  if (defaults.nap2) {
+    const ww2_1raw = weightedAvg(hist.ww2nap[1] || []);
+    const ww2_2raw = weightedAvg(hist.ww2nap[2] || []);
+    const ww2_1 = blendWW(ww2_1raw, (hist.ww2nap[1] || []).length, defaults.nap2[0]);
+    const ww2_2 = blendWW(ww2_2raw, (hist.ww2nap[2] || []).length, defaults.nap2[1]);
+    const dur2_1 = weightedAvg(hist.napDur[1] || []) || 50;
+    const dur2_2 = weightedAvg(hist.napDur[2] || []) || 80;
+    result.plan2 = [
+      { start: wake + ww2_1, end: wake + ww2_1 + dur2_1, label: t('nap') + ' 1' },
+      { start: wake + ww2_1 + dur2_1 + ww2_2, end: wake + ww2_1 + dur2_1 + ww2_2 + dur2_2, label: t('nap') + ' 2' },
+      { start: weightedAvg(hist.bed2) || bounds.bedMins, end: 0, label: t('bedtime') },
+    ];
+  }
 
-  return { plan2, plan3, twoNapPct: transition.twoNapPct };
+  // 3-nap plan
+  if (defaults.nap3) {
+    const ww3_1raw = weightedAvg(hist.ww3nap[1] || []);
+    const ww3_2raw = weightedAvg(hist.ww3nap[2] || []);
+    const ww3_3raw = weightedAvg(hist.ww3nap[3] || []);
+    const ww3_1 = blendWW(ww3_1raw, (hist.ww3nap[1] || []).length, defaults.nap3[0]);
+    const ww3_2 = blendWW(ww3_2raw, (hist.ww3nap[2] || []).length, defaults.nap3[1]);
+    const ww3_3 = blendWW(ww3_3raw, (hist.ww3nap[3] || []).length, defaults.nap3[2]);
+    const dur3_1 = weightedAvg(hist.napDur[1] || []) || 40;
+    const dur3_2 = weightedAvg(hist.napDur[2] || []) || 70;
+    const dur3_3 = weightedAvg(hist.napDur[3] || []) || 30;
+    let t3 = wake;
+    result.plan3 = [];
+    [ww3_1, ww3_2, ww3_3].forEach((ww, i) => {
+      const dur = [dur3_1, dur3_2, dur3_3][i];
+      result.plan3.push({ start: t3 + ww, end: t3 + ww + dur, label: t('nap') + ' ' + (i + 1) });
+      t3 = t3 + ww + dur;
+    });
+    result.plan3.push({ start: weightedAvg(hist.bed3) || bounds.bedMins, end: 0, label: t('bedtime') });
+  }
+
+  // 4-nap plan
+  if (defaults.nap4) {
+    const dur4 = [35, 50, 40, 25]; // default nap durations for 4-nap days
+    let t4 = wake;
+    result.plan4 = [];
+    for (let i = 0; i < 4; i++) {
+      const wwRaw = weightedAvg(hist.ww4nap[i + 1] || []);
+      const wwVal = blendWW(wwRaw, (hist.ww4nap[i + 1] || []).length, defaults.nap4[i]);
+      const dur = weightedAvg(hist.napDur[i + 1] || []) || dur4[i];
+      result.plan4.push({ start: t4 + wwVal, end: t4 + wwVal + dur, label: t('nap') + ' ' + (i + 1) });
+      t4 = t4 + wwVal + dur;
+    }
+    result.plan4.push({ start: weightedAvg(hist.bed4) || bounds.bedMins, end: 0, label: t('bedtime') });
+  }
+
+  return result;
 }
 
 function minsToDate(mins) {
@@ -2447,6 +2610,24 @@ function initApp() {
   document.getElementById('quick-wake-time').value = s.morningWake;
   document.getElementById('set-bed').value = s.bedtime;
   document.getElementById('set-age').value = s.babyAgeMonths;
+
+  // Handle auto-calculated age from birth date
+  const ageInput = document.getElementById('set-age');
+  const ageAutoEl = document.getElementById('age-auto-note');
+  if (DataService._birthDate) {
+    ageInput.readOnly = true;
+    ageInput.style.opacity = '0.6';
+    ageInput.style.cursor = 'default';
+    if (ageAutoEl) {
+      ageAutoEl.textContent = t('ageAutoCalculated') + ' — ' + t('ageMonthsDisplay', { months: s.babyAgeMonths });
+      ageAutoEl.classList.remove('hidden');
+    }
+  } else {
+    ageInput.readOnly = false;
+    ageInput.style.opacity = '1';
+    ageInput.style.cursor = '';
+    if (ageAutoEl) ageAutoEl.classList.add('hidden');
+  }
 
   // Set user avatar
   sb.auth.getUser().then(({ data: { user } }) => {
@@ -2905,15 +3086,30 @@ function renderDashboard() {
     const formatPlan = (plan) => plan.map(p =>
       '<div class="plan-item">' + p.label + ': ' + formatTimeFromMins(p.start) + (p.end !== p.start ? ' – ' + formatTimeFromMins(p.end) : '') + '</div>'
     ).join('');
-    planEl.innerHTML =
-      '<div class="plan-col">' +
-        '<h3>' + t('twonNapDay') + (mp.twoNapPct > 50 ? ' ⭐' : '') + '</h3>' +
-        formatPlan(mp.plan2) +
-      '</div>' +
-      '<div class="plan-col">' +
-        '<h3>' + t('threeNapDay') + (mp.twoNapPct <= 50 ? ' ⭐' : '') + '</h3>' +
-        formatPlan(mp.plan3) +
-      '</div>';
+    
+    // Build plan columns dynamically based on which plans exist
+    let planHTML = '';
+    const planConfigs = [];
+    if (mp.plan1) planConfigs.push({ plan: mp.plan1, label: t('oneNapDay'), key: 'plan1' });
+    if (mp.plan2) planConfigs.push({ plan: mp.plan2, label: t('twonNapDay'), key: 'plan2' });
+    if (mp.plan3) planConfigs.push({ plan: mp.plan3, label: t('threeNapDay'), key: 'plan3' });
+    if (mp.plan4) planConfigs.push({ plan: mp.plan4, label: t('fourNapDay'), key: 'plan4' });
+    
+    // Determine which plan gets the star (most likely)
+    let starKey = null;
+    if (mp.plan1 && (mp.oneNapPct || 0) >= 40) starKey = 'plan1';
+    else if (mp.plan2 && (mp.twoNapPct || 0) > 50) starKey = 'plan2';
+    else if (mp.plan3) starKey = 'plan3';
+    else if (mp.plan4) starKey = 'plan4';
+    else if (mp.plan2) starKey = 'plan2';
+    else if (mp.plan1) starKey = 'plan1';
+    
+    planConfigs.forEach(cfg => {
+      const star = cfg.key === starKey ? ' ⭐' : '';
+      planHTML += '<div class="plan-col"><h3>' + cfg.label + star + '</h3>' + formatPlan(cfg.plan) + '</div>';
+    });
+    
+    planEl.innerHTML = planHTML;
   } else {
     planCard.classList.add('hidden');
   }
